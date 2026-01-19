@@ -8,13 +8,16 @@ from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton, WebAppInfo
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from aiogram.fsm.storage.memory import MemoryStorage
-import sqlite3
 from datetime import datetime
 from dotenv import load_dotenv
 
+# Імпортуємо наш database helper
+from database import (
+    init_db, get_all_products, get_product, add_product, 
+    delete_product, add_order, get_recent_orders, save_user
+)
 
-load_dotenv() 
-
+load_dotenv()
 
 # Logging
 logging.basicConfig(level=logging.INFO)
@@ -28,45 +31,6 @@ ADMIN_ID = int(os.getenv('ADMIN_ID', '0'))
 bot = Bot(token=BOT_TOKEN)
 storage = MemoryStorage()
 dp = Dispatcher(storage=storage)
-
-# Database setup
-def init_db():
-    conn = sqlite3.connect('shop.db')
-    c = conn.cursor()
-    
-    # Products table
-    c.execute('''CREATE TABLE IF NOT EXISTS products
-                 (id INTEGER PRIMARY KEY AUTOINCREMENT,
-                  name TEXT NOT NULL,
-                  description TEXT,
-                  price REAL NOT NULL,
-                  image_url TEXT,
-                  category TEXT,
-                  product_type TEXT,
-                  sizes TEXT,
-                  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)''')
-    
-    # Orders table
-    c.execute('''CREATE TABLE IF NOT EXISTS orders
-                 (id INTEGER PRIMARY KEY AUTOINCREMENT,
-                  user_id INTEGER NOT NULL,
-                  username TEXT,
-                  products TEXT NOT NULL,
-                  total_price REAL NOT NULL,
-                  status TEXT DEFAULT 'pending',
-                  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)''')
-    
-    # Users table
-    c.execute('''CREATE TABLE IF NOT EXISTS users
-                 (user_id INTEGER PRIMARY KEY,
-                  username TEXT,
-                  first_name TEXT,
-                  last_name TEXT,
-                  is_admin INTEGER DEFAULT 0,
-                  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)''')
-    
-    conn.commit()
-    conn.close()
 
 # FSM States for adding products
 class AddProduct(StatesGroup):
@@ -82,38 +46,19 @@ class AddProduct(StatesGroup):
 def is_admin(user_id: int) -> bool:
     return user_id == ADMIN_ID
 
-# Get all products from DB
-def get_all_products():
-    conn = sqlite3.connect('shop.db')
-    conn.row_factory = sqlite3.Row
-    c = conn.cursor()
-    c.execute('SELECT * FROM products ORDER BY created_at DESC')
-    products = [dict(row) for row in c.fetchall()]
-    conn.close()
-    return products
-
-# Delete product from DB
-def delete_product(product_id: int):
-    conn = sqlite3.connect('shop.db')
-    c = conn.cursor()
-    c.execute('DELETE FROM products WHERE id = ?', (product_id,))
-    conn.commit()
-    conn.close()
-
 # Start command
 @dp.message(Command("start"))
 async def cmd_start(message: types.Message):
     user_id = message.from_user.id
     
     # Save user to database
-    conn = sqlite3.connect('shop.db')
-    c = conn.cursor()
-    c.execute('''INSERT OR REPLACE INTO users (user_id, username, first_name, last_name, is_admin)
-                 VALUES (?, ?, ?, ?, ?)''',
-              (user_id, message.from_user.username, message.from_user.first_name,
-               message.from_user.last_name, 1 if is_admin(user_id) else 0))
-    conn.commit()
-    conn.close()
+    save_user(
+        user_id, 
+        message.from_user.username, 
+        message.from_user.first_name,
+        message.from_user.last_name, 
+        1 if is_admin(user_id) else 0
+    )
     
     # Create keyboard with web app
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
@@ -262,15 +207,15 @@ async def finalize_product(message, state: FSMContext, sizes: str):
     data = await state.get_data()
     
     # Save to database
-    conn = sqlite3.connect('shop.db')
-    c = conn.cursor()
-    c.execute('''INSERT INTO products (name, description, price, image_url, category, product_type, sizes)
-                 VALUES (?, ?, ?, ?, ?, ?, ?)''',
-              (data['name'], data['description'], data['price'], 
-               data['image_url'], data['category'], data['product_type'], sizes))
-    conn.commit()
-    product_id = c.lastrowid
-    conn.close()
+    product_id = add_product(
+        data['name'], 
+        data['description'], 
+        data['price'], 
+        data['image_url'], 
+        data['category'], 
+        data['product_type'], 
+        sizes
+    )
     
     await message.answer(
         f"✅ Товар #{product_id} успішно додано!\n\n"
@@ -290,11 +235,7 @@ async def delete_product_menu(callback: types.CallbackQuery):
         await callback.answer("❌ У вас немає доступу", show_alert=True)
         return
     
-    conn = sqlite3.connect('shop.db')
-    c = conn.cursor()
-    c.execute('SELECT id, name, price FROM products ORDER BY created_at DESC LIMIT 20')
-    products = c.fetchall()
-    conn.close()
+    products = get_all_products()[:20]  # Перші 20
     
     if not products:
         await callback.message.edit_text("📦 Товарів немає")
@@ -304,8 +245,8 @@ async def delete_product_menu(callback: types.CallbackQuery):
     for p in products:
         keyboard_buttons.append([
             InlineKeyboardButton(
-                text=f"🗑️ {p[1]} ({p[2]} грн)", 
-                callback_data=f"del_prod_{p[0]}"
+                text=f"🗑️ {p['name']} ({p['price']} грн)", 
+                callback_data=f"del_prod_{p['id']}"
             )
         ])
     
@@ -357,11 +298,7 @@ async def list_products(callback: types.CallbackQuery):
         await callback.answer("❌ У вас немає доступу", show_alert=True)
         return
     
-    conn = sqlite3.connect('shop.db')
-    c = conn.cursor()
-    c.execute('SELECT id, name, price, category, product_type FROM products ORDER BY created_at DESC LIMIT 15')
-    products = c.fetchall()
-    conn.close()
+    products = get_all_products()[:15]  # Перші 15
     
     if not products:
         await callback.message.edit_text("📦 Товарів ще немає")
@@ -369,7 +306,7 @@ async def list_products(callback: types.CallbackQuery):
     
     text = "📦 <b>Список товарів:</b>\n\n"
     for p in products:
-        text += f"🆔 {p[0]} | {p[1]}\n💰 {p[2]} грн | {p[4]} | {p[3]}\n\n"
+        text += f"🆔 {p['id']} | {p['name']}\n💰 {p['price']} грн | {p['product_type']} | {p['category']}\n\n"
     
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="🔙 Назад", callback_data="admin")]
@@ -384,18 +321,15 @@ async def list_orders(callback: types.CallbackQuery):
         await callback.answer("❌ У вас немає доступу", show_alert=True)
         return
     
-    conn = sqlite3.connect('shop.db')
-    c = conn.cursor()
-    c.execute('SELECT id, username, total_price, created_at FROM orders ORDER BY created_at DESC LIMIT 10')
-    orders = c.fetchall()
-    conn.close()
+    orders = get_recent_orders(10)
     
     if not orders:
         text = "📊 Замовлень ще немає"
     else:
         text = "📊 <b>Останні замовлення:</b>\n\n"
         for o in orders:
-            text += f"🆔 #{o[0]} | @{o[1] or 'без username'}\n💰 {o[2]} грн | {o[3][:16]}\n\n"
+            created_at = str(o['created_at'])[:16] if o.get('created_at') else 'N/A'
+            text += f"🆔 #{o['id']} | @{o['username'] or 'без username'}\n💰 {o['total_price']} грн | {created_at}\n\n"
     
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="🔙 Назад", callback_data="admin")]
@@ -408,21 +342,14 @@ async def list_orders(callback: types.CallbackQuery):
 async def web_app_data(message: types.Message):
     data = json.loads(message.web_app_data.data)
     
-    if data.get('type') == 'get_products':
-        # Send products list
-        products = get_all_products()
-        await message.answer(json.dumps(products))
-    elif data.get('type') == 'order':
+    if data.get('type') == 'order':
         # Save order to database
-        conn = sqlite3.connect('shop.db')
-        c = conn.cursor()
-        c.execute('''INSERT INTO orders (user_id, username, products, total_price)
-                     VALUES (?, ?, ?, ?)''',
-                  (message.from_user.id, message.from_user.username,
-                   json.dumps(data['products']), data['total']))
-        conn.commit()
-        order_id = c.lastrowid
-        conn.close()
+        order_id = add_order(
+            message.from_user.id, 
+            message.from_user.username,
+            json.dumps(data['products']), 
+            data['total']
+        )
         
         # Notify admin
         if ADMIN_ID:
@@ -470,6 +397,7 @@ async def back_to_start(callback: types.CallbackQuery):
 # Main function
 async def main():
     init_db()
+    print("✅ Bot started successfully!")
     await dp.start_polling(bot)
 
 if __name__ == '__main__':

@@ -1,0 +1,39 @@
+services:
+  # API Server
+  - type: web
+    name: driphype-api
+    env: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn api_server:app
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.0
+      - key: BOT_TOKEN
+        sync: false
+      - key: ADMIN_ID
+        sync: false
+      - key: WEBAPP_URL
+        sync: false
+    
+  # Telegram Bot
+  - type: worker
+    name: driphype-bot
+    env: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: python bot.py
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.0
+      - key: BOT_TOKEN
+        sync: false
+      - key: ADMIN_ID
+        sync: false
+      - key: WEBAPP_URL
+        sync: false
+
+# PostgreSQL Database
+databases:
+  - name: driphype-db
+    plan: free
+    databaseName: driphype
+    user: driphype
