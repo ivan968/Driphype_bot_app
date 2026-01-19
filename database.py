@@ -78,9 +78,13 @@ if DATABASE_URL:
         
         if not fetch and not fetchone:
             conn.commit()
-            if 'INSERT' in query.upper() and 'RETURNING' not in query.upper():
-                c.execute('SELECT lastval()')
-                result = c.fetchone()[0] if c.rowcount > 0 else None
+            # Тільки для INSERT без ON CONFLICT
+            if 'INSERT' in query.upper() and 'CONFLICT' not in query.upper() and 'RETURNING' not in query.upper():
+                try:
+                    c.execute('SELECT lastval()')
+                    result = c.fetchone()[0] if c.rowcount > 0 else None
+                except:
+                    result = None
         
         conn.close()
         return result
@@ -219,4 +223,9 @@ def save_user(user_id, username, first_name, last_name, is_admin=0):
         query = '''INSERT OR REPLACE INTO users (user_id, username, first_name, last_name, is_admin)
                    VALUES (?, ?, ?, ?, ?)'''
     
-    execute_query(query, (user_id, username, first_name, last_name, is_admin))
+    # Не використовуємо execute_query для upsert - виконуємо напряму
+    conn = get_connection()
+    c = conn.cursor()
+    c.execute(query, (user_id, username, first_name, last_name, is_admin))
+    conn.commit()
+    conn.close()
