@@ -47,6 +47,24 @@
             font-size: 14px;
         }
 
+        .api-status {
+            display: inline-block;
+            padding: 5px 10px;
+            border-radius: 10px;
+            font-size: 12px;
+            margin-top: 10px;
+        }
+
+        .api-status.online {
+            background: #4caf50;
+            color: white;
+        }
+
+        .api-status.offline {
+            background: #ff9800;
+            color: white;
+        }
+
         .categories {
             display: flex;
             gap: 10px;
@@ -396,6 +414,15 @@
             margin-bottom: 20px;
             box-shadow: 0 4px 15px rgba(0,0,0,0.1);
         }
+
+        .error-message {
+            background: #ff4444;
+            color: white;
+            padding: 15px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+            text-align: center;
+        }
     </style>
 </head>
 <body>
@@ -403,9 +430,10 @@
         <div class="header">
             <h1>🛍️ Fashion Store</h1>
             <p>Стильний одяг для всієї родини</p>
+            <div class="api-status" id="apiStatus">🔄 З'єднання...</div>
         </div>
 
-        <button class="refresh-btn" onclick="loadProducts()">🔄 Оновити</button>
+        <button class="refresh-btn" onclick="loadProducts()">🔄 Оновити товари</button>
 
         <div class="categories" id="categories">
             <button class="category-btn active" data-category="all">Всі</button>
@@ -414,6 +442,8 @@
             <button class="category-btn" data-category="дитяче">Дитяче</button>
             <button class="category-btn" data-category="аксесуари">Аксесуари</button>
         </div>
+
+        <div id="errorContainer"></div>
 
         <div class="products-grid" id="productsGrid">
             <div class="loading">Завантаження товарів...</div>
@@ -425,7 +455,6 @@
         <span class="cart-count" id="cartCount">0</span>
     </button>
 
-    <!-- Product Modal -->
     <div class="modal" id="productModal">
         <div class="modal-content">
             <img class="modal-image" id="modalImage" src="" alt="">
@@ -446,7 +475,6 @@
         </div>
     </div>
 
-    <!-- Cart Modal -->
     <div class="modal" id="cartModal">
         <div class="modal-content">
             <div class="modal-body">
@@ -462,13 +490,17 @@
         tg.expand();
         tg.MainButton.hide();
 
+        // ВАЖЛИВО: Замініть це на ваш реальний URL Render після деплою
+        const API_URL = 'https://driphype-bot-app-service.onrender.com';
+
         let products = [];
         let cart = [];
         let selectedProduct = null;
         let selectedSize = null;
         let currentCategory = 'all';
+        let isApiOnline = false;
 
-        // Demo products (використовуються якщо немає з'єднання з ботом)
+        // Demo products (використовуються якщо API недоступне)
         const demoProducts = [
             {
                 id: 1,
@@ -499,48 +531,57 @@
                 category: "чоловіче",
                 product_type: "взуття",
                 sizes: "38,39,40,41,42,43,44,45"
-            },
-            {
-                id: 4,
-                name: "Дитяча кофта",
-                description: "М'яка тепла кофта для дітей",
-                price: 550,
-                image_url: "https://images.unsplash.com/photo-1519238263530-99bdd11df2ea?w=400",
-                category: "дитяче",
-                product_type: "спортивний",
-                sizes: "4,6,8,10,12"
-            },
-            {
-                id: 5,
-                name: "Шкіряна сумка",
-                description: "Модна сумка з натуральної шкіри",
-                price: 1500,
-                image_url: "https://images.unsplash.com/photo-1548036328-c9fa89d128fa?w=400",
-                category: "аксесуари",
-                product_type: "аксесуар",
-                sizes: "ONE SIZE"
             }
         ];
 
-        // Load products from SQLite via bot
         async function loadProducts() {
-            console.log('Завантаження товарів...');
+            console.log('🔄 Завантаження товарів з API...');
+            const errorContainer = document.getElementById('errorContainer');
+            const apiStatus = document.getElementById('apiStatus');
+            
+            errorContainer.innerHTML = '';
             
             try {
-                // Спроба отримати товари через API
-                const apiUrl = window.location.origin + '/api/products';
-                const response = await fetch(apiUrl);
+                // Спроба підключитися до API
+                const response = await fetch(`${API_URL}/api/products`, {
+                    method: 'GET',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    mode: 'cors'
+                });
                 
-                if (response.ok) {
-                    products = await response.json();
-                    console.log('Товари завантажені з API:', products.length);
-                } else {
-                    throw new Error('API недоступне');
+                if (!response.ok) {
+                    throw new Error(`API помилка: ${response.status}`);
                 }
+                
+                const data = await response.json();
+                
+                if (data.error) {
+                    throw new Error(data.error);
+                }
+                
+                products = data;
+                isApiOnline = true;
+                apiStatus.className = 'api-status online';
+                apiStatus.textContent = '✅ З\'єднано з API';
+                
+                console.log('✅ Товари успішно завантажені з API:', products.length);
+                
             } catch (error) {
-                console.log('Використання демо-товарів');
-                // Використовуємо демо-товари
+                console.warn('⚠️ Помилка API, використовуються демо-товари:', error.message);
+                
                 products = demoProducts;
+                isApiOnline = false;
+                apiStatus.className = 'api-status offline';
+                apiStatus.textContent = '⚠️ Демо режим';
+                
+                errorContainer.innerHTML = `
+                    <div class="error-message">
+                        ⚠️ API тимчасово недоступне. Показані демо-товари.
+                        <br><small>Переконайтесь що api_server.py запущено на Render</small>
+                    </div>
+                `;
             }
 
             renderProducts();
@@ -559,7 +600,10 @@
 
             grid.innerHTML = filtered.map(product => `
                 <div class="product-card" onclick="openProduct(${product.id})">
-                    <img class="product-image" src="${product.image_url}" alt="${product.name}" onerror="this.src='data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%22200%22 height=%22200%22%3E%3Crect fill=%22%23f0f0f0%22 width=%22200%22 height=%22200%22/%3E%3Ctext x=%2250%25%22 y=%2250%25%22 text-anchor=%22middle%22 dy=%22.3em%22 fill=%22%23999%22 font-size=%2250%22%3E${getProductIcon(product.product_type)}%3C/text%3E%3C/svg%3E'">
+                    <img class="product-image" 
+                         src="${product.image_url}" 
+                         alt="${product.name}" 
+                         onerror="this.src='data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%22200%22 height=%22200%22%3E%3Crect fill=%22%23f0f0f0%22 width=%22200%22 height=%22200%22/%3E%3Ctext x=%2250%25%22 y=%2250%25%22 text-anchor=%22middle%22 dy=%22.3em%22 fill=%22%23999%22 font-size=%2250%22%3E${getProductIcon(product.product_type)}%3C/text%3E%3C/svg%3E'">
                     <div class="product-info">
                         <div class="product-type">${product.product_type || 'одяг'}</div>
                         <div class="product-name">${product.name}</div>
@@ -712,7 +756,6 @@
             tg.close();
         }
 
-        // Category filter
         document.getElementById('categories').addEventListener('click', (e) => {
             if (e.target.classList.contains('category-btn')) {
                 document.querySelectorAll('.category-btn').forEach(btn => 
@@ -726,11 +769,15 @@
 
         document.getElementById('cartBtn').addEventListener('click', openCart);
 
-        // Initialize
+        // Ініціалізація при завантаженні
         loadProducts();
 
-        // Auto-refresh every 30 seconds
-        setInterval(loadProducts, 30000);
+        // Автооновлення кожні 30 секунд (тільки якщо API онлайн)
+        setInterval(() => {
+            if (isApiOnline) {
+                loadProducts();
+            }
+        }, 30000);
     </script>
 </body>
 </html>
