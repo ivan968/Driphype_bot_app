@@ -394,6 +394,7 @@ async def about(callback: types.CallbackQuery):
 async def back_to_start(callback: types.CallbackQuery):
     await cmd_start(callback.message)
 
+
 # Main function
 async def main():
     print("\n🔄 Ініціалізація бази даних...")
@@ -401,3 +402,7 @@ async def main():
     print("✅ Bot started successfully!")
     print("📱 Бот готовий приймати повідомлення...\n")
     await dp.start_polling(bot)
+
+# Це потрібно залишити для можливості запуску bot.py окремо
+if __name__ == '__main__':
+    asyncio.run(main())
