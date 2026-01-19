@@ -1,0 +1,7 @@
+cd "C:\Users\mrdad\Documents\Telegram mini app bot\Driphype_bot_app"
+
+# Створи файл
+echo 3.11.9 > .python-version
+
+# Перевір
+type .python-version
