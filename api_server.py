@@ -3,10 +3,17 @@ API сервер для динамічного завантаження това
 """
 from flask import Flask, jsonify
 from flask_cors import CORS
-from database import get_all_products, get_product
+from database import get_all_products, get_product, init_db
 
 app = Flask(__name__)
 CORS(app)  # Дозволяємо запити з будь-яких доменів
+
+# Ініціалізуємо базу при старті
+try:
+    init_db()
+    print("✅ Database initialized on startup")
+except Exception as e:
+    print(f"⚠️ Database init warning: {e}")
 
 @app.route('/', methods=['GET'])
 def home():
@@ -16,9 +23,19 @@ def home():
         'message': 'Driphype Shop API is running',
         'endpoints': {
             '/api/products': 'GET - Отримати всі товари',
-            '/api/products/<id>': 'GET - Отримати товар за ID'
+            '/api/products/<id>': 'GET - Отримати товар за ID',
+            '/api/init': 'POST - Ініціалізувати базу даних'
         }
     })
+
+@app.route('/api/init', methods=['GET', 'POST'])
+def initialize_db():
+    """Ініціалізувати базу даних"""
+    try:
+        init_db()
+        return jsonify({'status': 'success', 'message': 'Database initialized'})
+    except Exception as e:
+        return jsonify({'status': 'error', 'message': str(e)}), 500
 
 @app.route('/api/products', methods=['GET'])
 def get_products():
@@ -47,8 +64,4 @@ def health():
     """Health check endpoint для Render"""
     return jsonify({'status': 'healthy'}), 200
 
-if __name__ == '__main__':
-    # Запускаємо сервер
-    import os
-    port = int(os.environ.get('PORT', 5000))
-    app.run(host='0.0.0.0', port=port, debug=False)
+# Flask app ready to be imported by main.py or gunicorn
