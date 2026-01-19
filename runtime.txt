@@ -1,0 +1,2 @@
+cd "C:\Users\mrdad\Documents\Telegram mini app bot\Driphype_bot_app"
+echo python-3.11.9 > runtime.txt
