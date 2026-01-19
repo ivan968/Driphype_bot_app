@@ -109,6 +109,14 @@
             padding: 15px;
         }
 
+        .product-type {
+            font-size: 11px;
+            color: #667eea;
+            font-weight: 600;
+            text-transform: uppercase;
+            margin-bottom: 5px;
+        }
+
         .product-name {
             font-size: 15px;
             font-weight: 600;
@@ -194,6 +202,17 @@
 
         .modal-body {
             padding: 25px;
+        }
+
+        .modal-type {
+            display: inline-block;
+            background: #667eea;
+            color: white;
+            padding: 5px 15px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 600;
+            margin-bottom: 10px;
         }
 
         .modal-title {
@@ -318,6 +337,17 @@
             color: #667eea;
         }
 
+        .cart-item-remove {
+            background: #ff4444;
+            color: white;
+            border: none;
+            padding: 5px 10px;
+            border-radius: 5px;
+            font-size: 12px;
+            cursor: pointer;
+            margin-top: 5px;
+        }
+
         .cart-total {
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             color: white;
@@ -354,6 +384,18 @@
             color: white;
             font-size: 18px;
         }
+
+        .refresh-btn {
+            background: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 15px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            margin-bottom: 20px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+        }
     </style>
 </head>
 <body>
@@ -362,6 +404,8 @@
             <h1>🛍️ Fashion Store</h1>
             <p>Стильний одяг для всієї родини</p>
         </div>
+
+        <button class="refresh-btn" onclick="loadProducts()">🔄 Оновити</button>
 
         <div class="categories" id="categories">
             <button class="category-btn active" data-category="all">Всі</button>
@@ -386,6 +430,7 @@
         <div class="modal-content">
             <img class="modal-image" id="modalImage" src="" alt="">
             <div class="modal-body">
+                <span class="modal-type" id="modalType"></span>
                 <h2 class="modal-title" id="modalTitle"></h2>
                 <p class="modal-description" id="modalDescription"></p>
                 <div class="modal-price" id="modalPrice"></div>
@@ -423,72 +468,82 @@
         let selectedSize = null;
         let currentCategory = 'all';
 
-        // Load products from database via API
-        async function loadProducts() {
-            try {
-                const response = await fetch('/api/products');
-                products = await response.json();
-                renderProducts();
-            } catch (error) {
-                // Demo products if API fails
-                products = [
-                    {
-                        id: 1,
-                        name: "Класична футболка",
-                        description: "Комфортна бавовняна футболка преміум якості",
-                        price: 450,
-                        image_url: "https://images.unsplash.com/photo-1521572163474-6864f9cf17ab?w=400",
-                        category: "чоловіче",
-                        sizes: "S,M,L,XL"
-                    },
-                    {
-                        id: 2,
-                        name: "Жіноча сукня",
-                        description: "Елегантна літня сукня з натуральних матеріалів",
-                        price: 890,
-                        image_url: "https://images.unsplash.com/photo-1595777457583-95e059d581b8?w=400",
-                        category: "жіноче",
-                        sizes: "XS,S,M,L"
-                    },
-                    {
-                        id: 3,
-                        name: "Джинси Slim Fit",
-                        description: "Стильні джинси з еластаном для комфорту",
-                        price: 1200,
-                        image_url: "https://images.unsplash.com/photo-1542272604-787c3835535d?w=400",
-                        category: "чоловіче",
-                        sizes: "29,30,31,32,33,34"
-                    },
-                    {
-                        id: 4,
-                        name: "Дитяча кофта",
-                        description: "М'яка тепла кофта для дітей",
-                        price: 550,
-                        image_url: "https://images.unsplash.com/photo-1519238263530-99bdd11df2ea?w=400",
-                        category: "дитяче",
-                        sizes: "4,6,8,10,12"
-                    },
-                    {
-                        id: 5,
-                        name: "Шкіряна сумка",
-                        description: "Модна сумка з натуральної шкіри",
-                        price: 1500,
-                        image_url: "https://images.unsplash.com/photo-1548036328-c9fa89d128fa?w=400",
-                        category: "аксесуари",
-                        sizes: "ONE SIZE"
-                    },
-                    {
-                        id: 6,
-                        name: "Спортивний костюм",
-                        description: "Зручний костюм для тренувань та відпочинку",
-                        price: 1350,
-                        image_url: "https://images.unsplash.com/photo-1556906781-9a412961c28c?w=400",
-                        category: "чоловіче",
-                        sizes: "M,L,XL,XXL"
-                    }
-                ];
-                renderProducts();
+        // Demo products (використовуються якщо немає з'єднання з ботом)
+        const demoProducts = [
+            {
+                id: 1,
+                name: "Класична футболка",
+                description: "Комфортна бавовняна футболка преміум якості",
+                price: 450,
+                image_url: "https://images.unsplash.com/photo-1521572163474-6864f9cf17ab?w=400",
+                category: "чоловіче",
+                product_type: "футболка",
+                sizes: "XS,S,M,L,XL,XXL"
+            },
+            {
+                id: 2,
+                name: "Жіноча сукня",
+                description: "Елегантна літня сукня з натуральних матеріалів",
+                price: 890,
+                image_url: "https://images.unsplash.com/photo-1595777457583-95e059d581b8?w=400",
+                category: "жіноче",
+                product_type: "сукня",
+                sizes: "XS,S,M,L"
+            },
+            {
+                id: 3,
+                name: "Кросівки Nike",
+                description: "Спортивні кросівки для бігу та тренувань",
+                price: 2200,
+                image_url: "https://images.unsplash.com/photo-1542291026-7eec264c27ff?w=400",
+                category: "чоловіче",
+                product_type: "взуття",
+                sizes: "38,39,40,41,42,43,44,45"
+            },
+            {
+                id: 4,
+                name: "Дитяча кофта",
+                description: "М'яка тепла кофта для дітей",
+                price: 550,
+                image_url: "https://images.unsplash.com/photo-1519238263530-99bdd11df2ea?w=400",
+                category: "дитяче",
+                product_type: "спортивний",
+                sizes: "4,6,8,10,12"
+            },
+            {
+                id: 5,
+                name: "Шкіряна сумка",
+                description: "Модна сумка з натуральної шкіри",
+                price: 1500,
+                image_url: "https://images.unsplash.com/photo-1548036328-c9fa89d128fa?w=400",
+                category: "аксесуари",
+                product_type: "аксесуар",
+                sizes: "ONE SIZE"
             }
+        ];
+
+        // Load products from SQLite via bot
+        async function loadProducts() {
+            console.log('Завантаження товарів...');
+            
+            try {
+                // Спроба отримати товари через API
+                const apiUrl = window.location.origin + '/api/products';
+                const response = await fetch(apiUrl);
+                
+                if (response.ok) {
+                    products = await response.json();
+                    console.log('Товари завантажені з API:', products.length);
+                } else {
+                    throw new Error('API недоступне');
+                }
+            } catch (error) {
+                console.log('Використання демо-товарів');
+                // Використовуємо демо-товари
+                products = demoProducts;
+            }
+
+            renderProducts();
         }
 
         function renderProducts() {
@@ -504,8 +559,9 @@
 
             grid.innerHTML = filtered.map(product => `
                 <div class="product-card" onclick="openProduct(${product.id})">
-                    <img class="product-image" src="${product.image_url}" alt="${product.name}" onerror="this.src='data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%22200%22 height=%22200%22%3E%3Crect fill=%22%23f0f0f0%22 width=%22200%22 height=%22200%22/%3E%3Ctext x=%2250%25%22 y=%2250%25%22 text-anchor=%22middle%22 dy=%22.3em%22 fill=%22%23999%22%3E📷%3C/text%3E%3C/svg%3E'">
+                    <img class="product-image" src="${product.image_url}" alt="${product.name}" onerror="this.src='data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%22200%22 height=%22200%22%3E%3Crect fill=%22%23f0f0f0%22 width=%22200%22 height=%22200%22/%3E%3Ctext x=%2250%25%22 y=%2250%25%22 text-anchor=%22middle%22 dy=%22.3em%22 fill=%22%23999%22 font-size=%2250%22%3E${getProductIcon(product.product_type)}%3C/text%3E%3C/svg%3E'">
                     <div class="product-info">
+                        <div class="product-type">${product.product_type || 'одяг'}</div>
                         <div class="product-name">${product.name}</div>
                         <div class="product-price">${product.price} грн</div>
                     </div>
@@ -513,18 +569,33 @@
             `).join('');
         }
 
+        function getProductIcon(type) {
+            const icons = {
+                'футболка': '👕',
+                'штани': '👖',
+                'сукня': '👗',
+                'куртка': '🧥',
+                'взуття': '👟',
+                'спортивний': '🎽',
+                'костюм': '👔',
+                'аксесуар': '🎒'
+            };
+            return icons[type] || '👕';
+        }
+
         function openProduct(id) {
             selectedProduct = products.find(p => p.id === id);
             selectedSize = null;
             
             document.getElementById('modalImage').src = selectedProduct.image_url;
+            document.getElementById('modalType').textContent = selectedProduct.product_type || 'одяг';
             document.getElementById('modalTitle').textContent = selectedProduct.name;
             document.getElementById('modalDescription').textContent = selectedProduct.description;
             document.getElementById('modalPrice').textContent = `${selectedProduct.price} грн`;
             
             const sizes = selectedProduct.sizes.split(',');
             document.getElementById('sizeOptions').innerHTML = sizes.map(size => 
-                `<button class="size-btn" onclick="selectSize('${size}')">${size}</button>`
+                `<button class="size-btn" onclick="selectSize('${size.trim()}')">${size.trim()}</button>`
             ).join('');
             
             document.getElementById('productModal').classList.add('active');
@@ -577,6 +648,16 @@
             }
         }
 
+        function removeFromCart(index) {
+            cart.splice(index, 1);
+            updateCartCount();
+            if (cart.length === 0) {
+                closeModal();
+            } else {
+                openCart();
+            }
+        }
+
         function openCart() {
             if (cart.length === 0) {
                 tg.showAlert('Ваш кошик порожній');
@@ -592,6 +673,7 @@
                         <div class="cart-item-name">${item.name}</div>
                         <div class="cart-item-size">Розмір: ${item.selectedSize}</div>
                         <div class="cart-item-price">${item.price} грн</div>
+                        <button class="cart-item-remove" onclick="removeFromCart(${index})">Видалити</button>
                     </div>
                 </div>
             `).join('');
@@ -619,6 +701,7 @@
                 products: cart.map(item => ({
                     id: item.id,
                     name: item.name,
+                    type: item.product_type,
                     size: item.selectedSize,
                     price: item.price
                 })),
@@ -645,6 +728,9 @@
 
         // Initialize
         loadProducts();
+
+        // Auto-refresh every 30 seconds
+        setInterval(loadProducts, 30000);
     </script>
 </body>
 </html>
