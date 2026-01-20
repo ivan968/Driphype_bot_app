@@ -757,15 +757,18 @@ async def force_update_webhook(request):
         }, status=500)
 
 app = web.Application()
-app.on_startup.append(on_startup)
-app.on_shutdown.append(on_shutdown)
 
-# Додаємо роути
+# Спочатку додаємо роути
 app.router.add_get('/health', health_check)
 app.router.add_post('/update-webhook', force_update_webhook)
 app.router.add_get('/update-webhook', force_update_webhook)
 app.router.add_get('/', health_check)  # Головна сторінка теж показує статус
 
+# Потім додаємо startup/shutdown
+app.on_startup.append(on_startup)
+app.on_shutdown.append(on_shutdown)
+
+# В кінці налаштовуємо webhook handler
 SimpleRequestHandler(dispatcher=dp, bot=bot).register(app, path="/webhook/bot")
 setup_application(app, dp, bot=bot)
 
