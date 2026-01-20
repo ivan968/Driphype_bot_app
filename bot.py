@@ -742,7 +742,22 @@ async def on_shutdown(app: web.Application):
     except Exception as e:
         logging.error(f"❌ Помилка при shutdown: {e}")
 
-# Ендпоінт для перевірки статусу
+# Ендпоінт для API info (головна сторінка)
+async def api_info(request):
+    return web.json_response({
+        "status": "online",
+        "message": "Driphype Shop API is running",
+        "mode": "webhook",
+        "endpoints": {
+            "/api/products": "GET - Отримати всі товари",
+            "/api/products/{id}": "GET - Отримати товар за ID",
+            "/webhook/bot": "POST - Telegram webhook",
+            "/status": "GET - Bot status dashboard",
+            "/update-webhook": "GET - Force update webhook"
+        }
+    })
+
+# Ендпоінт для перевірки статусу (dashboard)
 async def health_check(request):
     try:
         webhook_info = await bot.get_webhook_info()
@@ -756,19 +771,96 @@ async def health_check(request):
         <head>
             <title>DripHype Bot Status</title>
             <meta http-equiv="refresh" content="10">
+            <style>
+                body {{
+                    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+                    padding: 40px;
+                    background: linear-gradient(135deg, #1a1a1a 0%, #2d1b4e 100%);
+                    color: #fff;
+                    margin: 0;
+                }}
+                .container {{
+                    max-width: 800px;
+                    margin: 0 auto;
+                    background: rgba(0, 0, 0, 0.5);
+                    padding: 30px;
+                    border-radius: 15px;
+                    box-shadow: 0 8px 32px rgba(168, 85, 247, 0.2);
+                }}
+                h1 {{
+                    color: #a855f7;
+                    margin-bottom: 30px;
+                }}
+                .status-item {{
+                    background: rgba(255, 255, 255, 0.05);
+                    padding: 15px;
+                    margin: 10px 0;
+                    border-radius: 8px;
+                    border-left: 3px solid #a855f7;
+                }}
+                .status-item strong {{
+                    color: #c084fc;
+                }}
+                .btn {{
+                    display: inline-block;
+                    color: #fff;
+                    background: linear-gradient(135deg, #a855f7 0%, #7c3aed 100%);
+                    text-decoration: none;
+                    padding: 12px 24px;
+                    border-radius: 8px;
+                    margin-top: 20px;
+                    transition: transform 0.2s;
+                }}
+                .btn:hover {{
+                    transform: translateY(-2px);
+                    box-shadow: 0 4px 12px rgba(168, 85, 247, 0.4);
+                }}
+                .footer {{
+                    text-align: center;
+                    color: #888;
+                    font-size: 12px;
+                    margin-top: 30px;
+                }}
+            </style>
         </head>
-        <body style="font-family: Arial; padding: 20px; background: #1a1a1a; color: #fff;">
-            <h1>🤖 DripHype Bot Status</h1>
-            <p>✅ <strong>Bot Status:</strong> Running</p>
-            <p>👤 <strong>Bot:</strong> @{bot_info.username}</p>
-            <p>🆔 <strong>Bot ID:</strong> {bot_info.id}</p>
-            <p>🔗 <strong>Webhook URL:</strong> {webhook_info.url or '❌ НЕ ВСТАНОВЛЕНО'}</p>
-            <p>📊 <strong>Pending Updates:</strong> {webhook_info.pending_update_count}</p>
-            <p>🔄 <strong>Auto Monitor:</strong> {monitor_status}</p>
-            <p>📋 <strong>Background Tasks:</strong> {len(background_tasks)}</p>
-            <hr>
-            <p><a href="/update-webhook" style="color: #4CAF50; text-decoration: none; padding: 10px 20px; background: #333; border-radius: 5px; display: inline-block;">🔄 Force Update Webhook</a></p>
-            <p style="color: #888; font-size: 12px; margin-top: 20px;">Сторінка автоматично оновлюється кожні 10 секунд</p>
+        <body>
+            <div class="container">
+                <h1>🤖 DripHype Bot Dashboard</h1>
+                
+                <div class="status-item">
+                    <strong>Bot Status:</strong> ✅ Running
+                </div>
+                
+                <div class="status-item">
+                    <strong>Bot Username:</strong> @{bot_info.username}
+                </div>
+                
+                <div class="status-item">
+                    <strong>Bot ID:</strong> {bot_info.id}
+                </div>
+                
+                <div class="status-item">
+                    <strong>Webhook URL:</strong> {webhook_info.url or '❌ НЕ ВСТАНОВЛЕНО'}
+                </div>
+                
+                <div class="status-item">
+                    <strong>Pending Updates:</strong> {webhook_info.pending_update_count}
+                </div>
+                
+                <div class="status-item">
+                    <strong>Auto Monitor:</strong> {monitor_status}
+                </div>
+                
+                <div class="status-item">
+                    <strong>Background Tasks:</strong> {len(background_tasks)}
+                </div>
+                
+                <a href="/update-webhook" class="btn">🔄 Force Update Webhook</a>
+                
+                <div class="footer">
+                    Сторінка автоматично оновлюється кожні 10 секунд
+                </div>
+            </div>
         </body>
         </html>
         """
@@ -821,10 +913,11 @@ app.on_shutdown.append(on_shutdown)
 SimpleRequestHandler(dispatcher=dp, bot=bot).register(app, path="/webhook/bot")
 
 # Додаємо наші роути ПІСЛЯ webhook handler
-app.router.add_route('GET', '/health', health_check)
+app.router.add_route('GET', '/', api_info)  # JSON API info
+app.router.add_route('GET', '/status', health_check)  # HTML dashboard
+app.router.add_route('GET', '/health', health_check)  # Альтернативний endpoint
 app.router.add_route('GET', '/update-webhook', force_update_webhook)
 app.router.add_route('POST', '/update-webhook', force_update_webhook)
-app.router.add_route('GET', '/', health_check)
 
 # setup_application в кінці
 setup_application(app, dp, bot=bot)
