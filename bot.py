@@ -909,19 +909,37 @@ app = web.Application()
 app.on_startup.append(on_startup)
 app.on_shutdown.append(on_shutdown)
 
-# Додаємо наші роути СПОЧАТКУ
-app.router.add_get('/', api_info)
-app.router.add_get('/status', health_check)
-app.router.add_get('/health', health_check)
-app.router.add_get('/update-webhook', force_update_webhook)
-app.router.add_post('/update-webhook', force_update_webhook)
+# Реєструємо webhook handler
+SimpleRequestHandler(dispatcher=dp, bot=bot).register(app, path="/webhook/bot")
 
-# Реєструємо webhook handler (це додає роут /webhook/bot)
-webhook_handler = SimpleRequestHandler(dispatcher=dp, bot=bot)
-webhook_handler.register(app, path="/webhook/bot")
+# Налаштовуємо aiogram
+setup_application(app, dp, bot=bot)
 
-# НЕ використовуємо setup_application, бо він перезаписує роути
-# setup_application(app, dp, bot=bot)  # <-- Закоментовано
+# ВАЖЛИВО: Додаємо наші роути ПІСЛЯ setup_application
+routes = web.RouteTableDef()
+
+@routes.get('/')
+async def root_handler(request):
+    return await api_info(request)
+
+@routes.get('/status')
+async def status_handler(request):
+    return await health_check(request)
+
+@routes.get('/health')
+async def health_handler(request):
+    return await health_check(request)
+
+@routes.get('/update-webhook')
+async def update_get_handler(request):
+    return await force_update_webhook(request)
+
+@routes.post('/update-webhook')
+async def update_post_handler(request):
+    return await force_update_webhook(request)
+
+# Додаємо роути до app
+app.add_routes(routes)
 
 if __name__ == "__main__":
     web.run_app(app, port=PORT)
