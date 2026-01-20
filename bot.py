@@ -147,6 +147,12 @@ async def cmd_start(message: types.Message):
 # =======================
 @dp.message(F.text == "ℹ️ Інформація")
 async def show_info(message: types.Message):
+    # Створюємо кнопки з посиланнями
+    contact_keyboard = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="👤 Власник", url="https://t.me/soryuko")],
+        [InlineKeyboardButton(text="🤝 Співпраця", url="https://t.me/whytodie")]
+    ])
+    
     info_text = (
         "ℹ️ <b>Про DripHype</b>\n\n"
         "🎯 <b>Якість та стиль</b>\n"
@@ -155,12 +161,11 @@ async def show_info(message: types.Message):
         "Доставка по всій Європі\n\n"
         "💳 <b>Зручна оплата</b>\n"
         "Безпечні методи оплати\n\n"
-        "📞 <b>Підтримка тг</b>\n"
-        "@soryuko - власник"
-        "@whytodie - співпраця"
+        "📞 <b>Підтримка</b>\n"
+        "Натисніть на кнопки нижче для зв'язку"
     )
     
-    await message.answer(info_text, parse_mode="HTML")
+    await message.answer(info_text, reply_markup=contact_keyboard, parse_mode="HTML")
 
 @dp.message(F.text == "⚙️ Адмін")
 async def admin_menu(message: types.Message):
@@ -646,4 +651,5 @@ setup_application(app, dp, bot=bot)
 
 if __name__ == "__main__":
     web.run_app(app, port=PORT)
+
 
