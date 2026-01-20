@@ -3,9 +3,18 @@
 """
 import os
 import asyncio
+import json
+from datetime import datetime
 from aiohttp import web
 from aiogram.webhook.aiohttp_server import SimpleRequestHandler, setup_application
 from bot import dp, bot, init_db
+
+# Custom JSON encoder для datetime
+class DateTimeEncoder(json.JSONEncoder):
+    def default(self, obj):
+        if isinstance(obj, datetime):
+            return obj.isoformat()
+        return super().default(obj)
 
 # Webhook settings
 WEBHOOK_PATH = "/webhook/bot"
@@ -36,7 +45,12 @@ async def get_products(request):
         # Викликаємо синхронну функцію в executor
         loop = asyncio.get_event_loop()
         products = await loop.run_in_executor(None, get_all_products)
-        return web.json_response(products)
+        
+        # Конвертуємо datetime в string
+        return web.Response(
+            text=json.dumps(products, cls=DateTimeEncoder),
+            content_type='application/json'
+        )
     except Exception as e:
         import traceback
         traceback.print_exc()
@@ -54,7 +68,11 @@ async def get_product(request):
         product = await loop.run_in_executor(None, db_get_product, product_id)
         
         if product:
-            return web.json_response(product)
+            # Конвертуємо datetime в string
+            return web.Response(
+                text=json.dumps(product, cls=DateTimeEncoder),
+                content_type='application/json'
+            )
         else:
             return web.json_response({'error': 'Product not found'}, status=404)
     except Exception as e:
