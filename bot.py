@@ -632,10 +632,16 @@ async def list_orders_handler(callback: types.CallbackQuery):
 # WEBHOOK APP
 # =======================
 
+# Глобальна змінна для контролю фонового таску
+background_tasks = set()
+
 # Фоновий таск для автоматичної перевірки webhook
 async def webhook_monitor():
-    """Перевіряє та оновлює webhook кожні 5 хвилин"""
-    await asyncio.sleep(60)  # Чекаємо 1 хвилину після старту
+    """Перевіряє та оновлює webhook кожні 3 хвилини"""
+    logging.info("🔄 Webhook monitor запущено!")
+    
+    # Чекаємо 30 секунд після старту
+    await asyncio.sleep(30)
     
     while True:
         try:
@@ -643,66 +649,92 @@ async def webhook_monitor():
             expected_url = f"{WEBHOOK_URL}/webhook/bot"
             
             # Перевіряємо чи webhook встановлений правильно
-            if webhook_info.url != expected_url:
-                logging.warning(f"⚠️ Webhook URL не співпадає! Очікуємо: {expected_url}, Поточний: {webhook_info.url}")
+            if not webhook_info.url or webhook_info.url != expected_url:
+                logging.warning(f"⚠️ Webhook URL неправильний! Очікуємо: {expected_url}, Поточний: {webhook_info.url}")
                 await bot.delete_webhook(drop_pending_updates=True)
+                await asyncio.sleep(2)
                 await bot.set_webhook(url=expected_url, drop_pending_updates=True)
-                logging.info(f"✅ Webhook оновлено на {expected_url}")
-            elif webhook_info.pending_update_count > 50:
+                logging.info(f"✅ Webhook автоматично оновлено на {expected_url}")
+                
+            elif webhook_info.pending_update_count > 30:
                 # Якщо накопичилось багато оновлень - перезапускаємо webhook
                 logging.warning(f"⚠️ Багато pending updates: {webhook_info.pending_update_count}")
                 await bot.delete_webhook(drop_pending_updates=True)
+                await asyncio.sleep(2)
                 await bot.set_webhook(url=expected_url, drop_pending_updates=True)
-                logging.info("✅ Webhook перезапущено")
+                logging.info("✅ Webhook автоматично перезапущено через pending updates")
+                
             else:
-                logging.info(f"✅ Webhook OK: {webhook_info.url}, pending: {webhook_info.pending_update_count}")
+                logging.info(f"✅ Webhook перевірено: OK (pending: {webhook_info.pending_update_count})")
             
+        except asyncio.CancelledError:
+            logging.info("🛑 Webhook monitor зупинено")
+            break
         except Exception as e:
             logging.error(f"❌ Помилка в webhook monitor: {e}")
         
-        # Перевіряємо кожні 5 хвилин
-        await asyncio.sleep(300)
+        # Перевіряємо кожні 3 хвилини (180 секунд)
+        await asyncio.sleep(180)
 
 async def on_startup(app: web.Application):
+    """Виконується при старті додатку"""
+    logging.info("🚀 Запуск бота...")
+    
+    # Ініціалізуємо базу даних
     init_db()
+    
     webhook_url = f"{WEBHOOK_URL}/webhook/bot"
     
     try:
         # Отримуємо інфо про поточний webhook
         webhook_info = await bot.get_webhook_info()
-        logging.info(f"📡 Поточний webhook: {webhook_info.url}")
+        logging.info(f"📡 Поточний webhook: {webhook_info.url or 'НЕ ВСТАНОВЛЕНО'}")
         
-        # Завжди видаляємо і встановлюємо заново для гарантії
-        await bot.delete_webhook(drop_pending_updates=True)
-        logging.info("🗑️ Старий webhook видалено")
-        
-        await asyncio.sleep(1)  # Невелика пауза
+        # Завжди видаляємо старий webhook при старті
+        if webhook_info.url:
+            await bot.delete_webhook(drop_pending_updates=True)
+            logging.info("🗑️ Старий webhook видалено")
+            await asyncio.sleep(2)  # Даємо час Telegram обробити
         
         # Встановлюємо новий webhook
         result = await bot.set_webhook(
             url=webhook_url,
             drop_pending_updates=True,
-            allowed_updates=["message", "callback_query", "inline_query"]
+            allowed_updates=["message", "callback_query"]
         )
         
         if result:
             logging.info(f"✅ Webhook успішно встановлено на {webhook_url}")
         else:
-            logging.error("❌ Не вдалось встановити webhook")
+            logging.error("❌ Не вдалось встановити webhook!")
         
         # Перевіряємо що встановилось
+        await asyncio.sleep(1)
         new_webhook_info = await bot.get_webhook_info()
-        logging.info(f"📋 Webhook info: URL={new_webhook_info.url}, Pending={new_webhook_info.pending_update_count}")
+        logging.info(f"📋 Webhook статус: URL={new_webhook_info.url}, Pending={new_webhook_info.pending_update_count}")
         
         # Запускаємо фоновий моніторинг webhook
-        asyncio.create_task(webhook_monitor())
-        logging.info("🔄 Запущено автоматичний моніторинг webhook")
+        task = asyncio.create_task(webhook_monitor())
+        background_tasks.add(task)
+        task.add_done_callback(background_tasks.discard)
+        
+        logging.info("🔄 Автоматичний моніторинг webhook запущено (перевірка кожні 3 хвилини)")
         
     except Exception as e:
-        logging.error(f"❌ Помилка при встановленні webhook: {e}")
+        logging.error(f"❌ Критична помилка при встановленні webhook: {e}", exc_info=True)
 
 async def on_shutdown(app: web.Application):
+    """Виконується при зупинці додатку"""
     logging.info("🛑 Зупинка бота...")
+    
+    # Скасовуємо всі фонові таски
+    for task in background_tasks:
+        task.cancel()
+    
+    # Чекаємо завершення всіх тасків
+    if background_tasks:
+        await asyncio.gather(*background_tasks, return_exceptions=True)
+    
     try:
         await bot.delete_webhook()
         await bot.session.close()
@@ -715,19 +747,34 @@ async def health_check(request):
     try:
         webhook_info = await bot.get_webhook_info()
         bot_info = await bot.get_me()
-        return web.json_response({
-            "status": "ok",
-            "bot_username": bot_info.username,
-            "bot_id": bot_info.id,
-            "webhook_url": webhook_info.url,
-            "pending_updates": webhook_info.pending_update_count,
-            "expected_url": f"{WEBHOOK_URL}/webhook/bot"
-        })
+        
+        # Перевіряємо чи працює моніторинг
+        monitor_status = "🟢 Активний" if len(background_tasks) > 0 else "🔴 Не запущено"
+        
+        html = f"""
+        <html>
+        <head>
+            <title>DripHype Bot Status</title>
+            <meta http-equiv="refresh" content="10">
+        </head>
+        <body style="font-family: Arial; padding: 20px; background: #1a1a1a; color: #fff;">
+            <h1>🤖 DripHype Bot Status</h1>
+            <p>✅ <strong>Bot Status:</strong> Running</p>
+            <p>👤 <strong>Bot:</strong> @{bot_info.username}</p>
+            <p>🆔 <strong>Bot ID:</strong> {bot_info.id}</p>
+            <p>🔗 <strong>Webhook URL:</strong> {webhook_info.url or '❌ НЕ ВСТАНОВЛЕНО'}</p>
+            <p>📊 <strong>Pending Updates:</strong> {webhook_info.pending_update_count}</p>
+            <p>🔄 <strong>Auto Monitor:</strong> {monitor_status}</p>
+            <p>📋 <strong>Background Tasks:</strong> {len(background_tasks)}</p>
+            <hr>
+            <p><a href="/update-webhook" style="color: #4CAF50; text-decoration: none; padding: 10px 20px; background: #333; border-radius: 5px; display: inline-block;">🔄 Force Update Webhook</a></p>
+            <p style="color: #888; font-size: 12px; margin-top: 20px;">Сторінка автоматично оновлюється кожні 10 секунд</p>
+        </body>
+        </html>
+        """
+        return web.Response(text=html, content_type='text/html')
     except Exception as e:
-        return web.json_response({
-            "status": "error",
-            "message": str(e)
-        }, status=500)
+        return web.Response(text=f"Error: {str(e)}", status=500)
 
 # Ендпоінт для форсованого оновлення webhook
 async def force_update_webhook(request):
@@ -743,33 +790,43 @@ async def force_update_webhook(request):
         )
         
         webhook_info = await bot.get_webhook_info()
-        return web.json_response({
-            "status": "success" if result else "failed",
-            "webhook_url": webhook_info.url,
-            "pending_update_count": webhook_info.pending_update_count,
-            "message": "Webhook оновлено!" if result else "Не вдалось оновити webhook"
-        })
+        
+        html = f"""
+        <html>
+        <head>
+            <title>Webhook Updated</title>
+            <meta http-equiv="refresh" content="3;url=/">
+        </head>
+        <body style="font-family: Arial; padding: 20px; background: #1a1a1a; color: #fff;">
+            <h1>{'✅ Webhook Updated!' if result else '❌ Update Failed'}</h1>
+            <p><strong>Webhook URL:</strong> {webhook_info.url}</p>
+            <p><strong>Pending Updates:</strong> {webhook_info.pending_update_count}</p>
+            <p>Redirecting to home page in 3 seconds...</p>
+            <p><a href="/" style="color: #4CAF50;">Go back now</a></p>
+        </body>
+        </html>
+        """
+        return web.Response(text=html, content_type='text/html')
     except Exception as e:
         logging.error(f"Error updating webhook: {e}")
-        return web.json_response({
-            "status": "error",
-            "message": str(e)
-        }, status=500)
+        return web.Response(text=f"Error: {str(e)}", status=500)
 
 app = web.Application()
 
-# Спочатку додаємо роути
-app.router.add_get('/health', health_check)
-app.router.add_post('/update-webhook', force_update_webhook)
-app.router.add_get('/update-webhook', force_update_webhook)
-app.router.add_get('/', health_check)  # Головна сторінка теж показує статус
-
-# Потім додаємо startup/shutdown
+# Додаємо startup/shutdown
 app.on_startup.append(on_startup)
 app.on_shutdown.append(on_shutdown)
 
-# В кінці налаштовуємо webhook handler
+# Реєструємо webhook handler
 SimpleRequestHandler(dispatcher=dp, bot=bot).register(app, path="/webhook/bot")
+
+# Додаємо наші роути ПІСЛЯ webhook handler
+app.router.add_route('GET', '/health', health_check)
+app.router.add_route('GET', '/update-webhook', force_update_webhook)
+app.router.add_route('POST', '/update-webhook', force_update_webhook)
+app.router.add_route('GET', '/', health_check)
+
+# setup_application в кінці
 setup_application(app, dp, bot=bot)
 
 if __name__ == "__main__":
