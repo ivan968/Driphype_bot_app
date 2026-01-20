@@ -136,9 +136,7 @@ def create_app():
         bot=bot,
     )
     webhook_handler.register(app, path=WEBHOOK_PATH)
-    
-    # НЕ використовуємо setup_application - він конфліктує з нашим on_startup
-    # setup_application(app, dp, bot=bot)  # ← ЗАКОМЕНТОВАНО
+    setup_application(app, dp, bot=bot)
     
     app.on_startup.append(on_startup)
     app.on_shutdown.append(on_shutdown)
