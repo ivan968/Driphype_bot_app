@@ -909,18 +909,19 @@ app = web.Application()
 app.on_startup.append(on_startup)
 app.on_shutdown.append(on_shutdown)
 
-# Реєструємо webhook handler
-SimpleRequestHandler(dispatcher=dp, bot=bot).register(app, path="/webhook/bot")
+# Додаємо наші роути СПОЧАТКУ
+app.router.add_get('/', api_info)
+app.router.add_get('/status', health_check)
+app.router.add_get('/health', health_check)
+app.router.add_get('/update-webhook', force_update_webhook)
+app.router.add_post('/update-webhook', force_update_webhook)
 
-# Додаємо наші роути ПІСЛЯ webhook handler
-app.router.add_route('GET', '/', api_info)  # JSON API info
-app.router.add_route('GET', '/status', health_check)  # HTML dashboard
-app.router.add_route('GET', '/health', health_check)  # Альтернативний endpoint
-app.router.add_route('GET', '/update-webhook', force_update_webhook)
-app.router.add_route('POST', '/update-webhook', force_update_webhook)
+# Реєструємо webhook handler (це додає роут /webhook/bot)
+webhook_handler = SimpleRequestHandler(dispatcher=dp, bot=bot)
+webhook_handler.register(app, path="/webhook/bot")
 
-# setup_application в кінці
-setup_application(app, dp, bot=bot)
+# НЕ використовуємо setup_application, бо він перезаписує роути
+# setup_application(app, dp, bot=bot)  # <-- Закоментовано
 
 if __name__ == "__main__":
     web.run_app(app, port=PORT)
