@@ -13,6 +13,7 @@ from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from aiogram.fsm.storage.memory import MemoryStorage
 from aiogram.webhook.aiohttp_server import SimpleRequestHandler, setup_application
+import asyncio
 
 from database import (
     init_db, get_all_products, get_product, add_product,
@@ -630,26 +631,143 @@ async def list_orders_handler(callback: types.CallbackQuery):
 # =======================
 # WEBHOOK APP
 # =======================
+
+# Фоновий таск для автоматичної перевірки webhook
+async def webhook_monitor():
+    """Перевіряє та оновлює webhook кожні 5 хвилин"""
+    await asyncio.sleep(60)  # Чекаємо 1 хвилину після старту
+    
+    while True:
+        try:
+            webhook_info = await bot.get_webhook_info()
+            expected_url = f"{WEBHOOK_URL}/webhook/bot"
+            
+            # Перевіряємо чи webhook встановлений правильно
+            if webhook_info.url != expected_url:
+                logging.warning(f"⚠️ Webhook URL не співпадає! Очікуємо: {expected_url}, Поточний: {webhook_info.url}")
+                await bot.delete_webhook(drop_pending_updates=True)
+                await bot.set_webhook(url=expected_url, drop_pending_updates=True)
+                logging.info(f"✅ Webhook оновлено на {expected_url}")
+            elif webhook_info.pending_update_count > 50:
+                # Якщо накопичилось багато оновлень - перезапускаємо webhook
+                logging.warning(f"⚠️ Багато pending updates: {webhook_info.pending_update_count}")
+                await bot.delete_webhook(drop_pending_updates=True)
+                await bot.set_webhook(url=expected_url, drop_pending_updates=True)
+                logging.info("✅ Webhook перезапущено")
+            else:
+                logging.info(f"✅ Webhook OK: {webhook_info.url}, pending: {webhook_info.pending_update_count}")
+            
+        except Exception as e:
+            logging.error(f"❌ Помилка в webhook monitor: {e}")
+        
+        # Перевіряємо кожні 5 хвилин
+        await asyncio.sleep(300)
+
 async def on_startup(app: web.Application):
     init_db()
-    await bot.set_webhook(
-        url=f"{WEBHOOK_URL}/webhook/bot",
-        drop_pending_updates=True
-    )
-    logging.info("✅ Webhook встановлено")
+    webhook_url = f"{WEBHOOK_URL}/webhook/bot"
+    
+    try:
+        # Отримуємо інфо про поточний webhook
+        webhook_info = await bot.get_webhook_info()
+        logging.info(f"📡 Поточний webhook: {webhook_info.url}")
+        
+        # Завжди видаляємо і встановлюємо заново для гарантії
+        await bot.delete_webhook(drop_pending_updates=True)
+        logging.info("🗑️ Старий webhook видалено")
+        
+        await asyncio.sleep(1)  # Невелика пауза
+        
+        # Встановлюємо новий webhook
+        result = await bot.set_webhook(
+            url=webhook_url,
+            drop_pending_updates=True,
+            allowed_updates=["message", "callback_query", "inline_query"]
+        )
+        
+        if result:
+            logging.info(f"✅ Webhook успішно встановлено на {webhook_url}")
+        else:
+            logging.error("❌ Не вдалось встановити webhook")
+        
+        # Перевіряємо що встановилось
+        new_webhook_info = await bot.get_webhook_info()
+        logging.info(f"📋 Webhook info: URL={new_webhook_info.url}, Pending={new_webhook_info.pending_update_count}")
+        
+        # Запускаємо фоновий моніторинг webhook
+        asyncio.create_task(webhook_monitor())
+        logging.info("🔄 Запущено автоматичний моніторинг webhook")
+        
+    except Exception as e:
+        logging.error(f"❌ Помилка при встановленні webhook: {e}")
 
 async def on_shutdown(app: web.Application):
-    await bot.delete_webhook()
-    logging.info("❌ Webhook видалено")
+    logging.info("🛑 Зупинка бота...")
+    try:
+        await bot.delete_webhook()
+        await bot.session.close()
+        logging.info("✅ Webhook видалено, сесія закрита")
+    except Exception as e:
+        logging.error(f"❌ Помилка при shutdown: {e}")
+
+# Ендпоінт для перевірки статусу
+async def health_check(request):
+    try:
+        webhook_info = await bot.get_webhook_info()
+        bot_info = await bot.get_me()
+        return web.json_response({
+            "status": "ok",
+            "bot_username": bot_info.username,
+            "bot_id": bot_info.id,
+            "webhook_url": webhook_info.url,
+            "pending_updates": webhook_info.pending_update_count,
+            "expected_url": f"{WEBHOOK_URL}/webhook/bot"
+        })
+    except Exception as e:
+        return web.json_response({
+            "status": "error",
+            "message": str(e)
+        }, status=500)
+
+# Ендпоінт для форсованого оновлення webhook
+async def force_update_webhook(request):
+    try:
+        await bot.delete_webhook(drop_pending_updates=True)
+        await asyncio.sleep(1)
+        
+        webhook_url = f"{WEBHOOK_URL}/webhook/bot"
+        result = await bot.set_webhook(
+            url=webhook_url,
+            drop_pending_updates=True,
+            allowed_updates=["message", "callback_query", "inline_query"]
+        )
+        
+        webhook_info = await bot.get_webhook_info()
+        return web.json_response({
+            "status": "success" if result else "failed",
+            "webhook_url": webhook_info.url,
+            "pending_update_count": webhook_info.pending_update_count,
+            "message": "Webhook оновлено!" if result else "Не вдалось оновити webhook"
+        })
+    except Exception as e:
+        logging.error(f"Error updating webhook: {e}")
+        return web.json_response({
+            "status": "error",
+            "message": str(e)
+        }, status=500)
 
 app = web.Application()
 app.on_startup.append(on_startup)
 app.on_shutdown.append(on_shutdown)
+
+# Додаємо роути
+app.router.add_get('/health', health_check)
+app.router.add_post('/update-webhook', force_update_webhook)
+app.router.add_get('/update-webhook', force_update_webhook)
+app.router.add_get('/', health_check)  # Головна сторінка теж показує статус
 
 SimpleRequestHandler(dispatcher=dp, bot=bot).register(app, path="/webhook/bot")
 setup_application(app, dp, bot=bot)
 
 if __name__ == "__main__":
     web.run_app(app, port=PORT)
-
-
