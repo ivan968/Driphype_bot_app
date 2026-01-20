@@ -50,6 +50,9 @@ class AddProduct(StatesGroup):
     product_type = State()
     sizes = State()
 
+class DeleteProduct(StatesGroup):
+    confirm = State()
+
 def is_admin(user_id: int) -> bool:
     return user_id == ADMIN_ID
 
@@ -91,6 +94,16 @@ def get_category_keyboard():
         [
             InlineKeyboardButton(text="👨 Чоловіче", callback_data="cat_чоловіче"),
             InlineKeyboardButton(text="👩 Жіноче", callback_data="cat_жіноче")
+        ],
+        [InlineKeyboardButton(text="❌ Скасувати", callback_data="cancel_add")]
+    ])
+
+def get_product_type_keyboard():
+    """Вибір типу товару"""
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [
+            InlineKeyboardButton(text="👕 Одяг", callback_data="type_одяг"),
+            InlineKeyboardButton(text="👟 Взуття", callback_data="type_взуття")
         ],
         [InlineKeyboardButton(text="❌ Скасувати", callback_data="cancel_add")]
     ])
@@ -257,11 +270,30 @@ async def add_image(message: types.Message, state: FSMContext):
 async def add_category(callback: types.CallbackQuery, state: FSMContext):
     category = callback.data.replace("cat_", "")
     await state.update_data(category=category)
+    await state.set_state(AddProduct.product_type)
+    await callback.message.edit_text(
+        "🏷️ <b>Тип товару</b>\n\n"
+        "Оберіть тип товару:",
+        reply_markup=get_product_type_keyboard(),
+        parse_mode="HTML"
+    )
+    await callback.answer()
+
+@dp.callback_query(F.data.startswith("type_"))
+async def add_product_type(callback: types.CallbackQuery, state: FSMContext):
+    product_type = callback.data.replace("type_", "")
+    await state.update_data(product_type=product_type)
     await state.set_state(AddProduct.sizes)
+    
+    if product_type == "взуття":
+        size_example = "<i>Приклад: 36, 37, 38, 39, 40</i>"
+    else:
+        size_example = "<i>Приклад: S, M, L, XL</i>"
+    
     await callback.message.edit_text(
         "📏 <b>Останній крок!</b>\n\n"
-        "Введіть доступні розміри через кому\n"
-        "<i>Приклад: S, M, L, XL</i>",
+        f"Введіть доступні розміри через кому\n"
+        f"{size_example}",
         reply_markup=get_cancel_keyboard(),
         parse_mode="HTML"
     )
@@ -278,7 +310,7 @@ async def finish_product(message: types.Message, state: FSMContext):
             data["price"],
             data["image_url"], 
             data["category"], 
-            "одяг", 
+            data.get("product_type", "одяг"),  # Використовуємо збережений тип
             message.text
         )
         
@@ -288,6 +320,7 @@ async def finish_product(message: types.Message, state: FSMContext):
             f"📦 Назва: {data['name']}\n"
             f"💰 Ціна: {data['price']} грн\n"
             f"📁 Категорія: {data['category']}\n"
+            f"🏷️ Тип: {data.get('product_type', 'одяг')}\n"
             f"📏 Розміри: {message.text}"
         )
         
@@ -351,33 +384,189 @@ async def list_products_handler(callback: types.CallbackQuery):
     if not is_admin(callback.from_user.id):
         return await callback.answer("❌ Немає доступу", show_alert=True)
     
-    products = get_all_products()
-    
-    if not products:
+    try:
+        products = get_all_products()
+        
+        if not products:
+            await callback.message.edit_text(
+                "📦 <b>Список товарів порожній</b>",
+                reply_markup=get_admin_keyboard(),
+                parse_mode="HTML"
+            )
+            return await callback.answer()
+        
+        products_text = "📦 <b>Список товарів:</b>\n\n"
+        for p in products[:15]:  # Показуємо перші 15
+            # Перевіряємо чи це словник чи кортеж
+            if isinstance(p, dict):
+                product_id = p.get('id', 'N/A')
+                name = p.get('name', 'N/A')
+                price = p.get('price', 0)
+                category = p.get('category', 'N/A')
+                product_type = p.get('product_type', 'одяг')
+                sizes = p.get('sizes', 'N/A')
+            else:
+                product_id = p[0] if len(p) > 0 else 'N/A'
+                name = p[1] if len(p) > 1 else 'N/A'
+                price = p[3] if len(p) > 3 else 0
+                category = p[5] if len(p) > 5 else 'N/A'
+                product_type = p[6] if len(p) > 6 else 'одяг'
+                sizes = p[7] if len(p) > 7 else 'N/A'
+            
+            product_type_emoji = "👟" if product_type == "взуття" else "👕"
+            products_text += (
+                f"{product_type_emoji} <b>{name}</b>\n"
+                f"🆔 ID: #{product_id} | 💰 {price} грн\n"
+                f"📁 {category} | 📏 {sizes}\n\n"
+            )
+        
+        if len(products) > 15:
+            products_text += f"\n<i>... та ще {len(products) - 15} товарів</i>"
+        
+        back_keyboard = InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text="🔙 Назад", callback_data="admin")]
+        ])
+        
         await callback.message.edit_text(
-            "📦 <b>Список товарів порожній</b>",
+            products_text,
+            reply_markup=back_keyboard,
+            parse_mode="HTML"
+        )
+        await callback.answer()
+    except Exception as e:
+        logging.error(f"Error listing products: {e}")
+        await callback.answer("❌ Помилка при завантаженні товарів", show_alert=True)
+
+# =======================
+# DELETE PRODUCT
+# =======================
+@dp.callback_query(F.data == "delete_product_menu")
+async def delete_product_menu_handler(callback: types.CallbackQuery):
+    if not is_admin(callback.from_user.id):
+        return await callback.answer("❌ Немає доступу", show_alert=True)
+    
+    try:
+        products = get_all_products()
+        
+        if not products:
+            await callback.message.edit_text(
+                "📦 <b>Немає товарів для видалення</b>",
+                reply_markup=get_admin_keyboard(),
+                parse_mode="HTML"
+            )
+            return await callback.answer()
+        
+        # Створюємо кнопки для кожного товару
+        keyboard_buttons = []
+        for p in products[:20]:  # Показуємо до 20 товарів
+            if isinstance(p, dict):
+                product_id = p.get('id', 0)
+                name = p.get('name', 'N/A')
+                product_type = p.get('product_type', 'одяг')
+            else:
+                product_id = p[0] if len(p) > 0 else 0
+                name = p[1] if len(p) > 1 else 'N/A'
+                product_type = p[6] if len(p) > 6 else 'одяг'
+            
+            product_type_emoji = "👟" if product_type == "взуття" else "👕"
+            button_text = f"{product_type_emoji} {name} (#{product_id})"
+            keyboard_buttons.append([
+                InlineKeyboardButton(
+                    text=button_text,
+                    callback_data=f"delete_{product_id}"
+                )
+            ])
+        
+        # Додаємо кнопку назад
+        keyboard_buttons.append([
+            InlineKeyboardButton(text="🔙 Назад", callback_data="admin")
+        ])
+        
+        delete_keyboard = InlineKeyboardMarkup(inline_keyboard=keyboard_buttons)
+        
+        await callback.message.edit_text(
+            "🗑️ <b>Видалення товару</b>\n\n"
+            "Оберіть товар для видалення:",
+            reply_markup=delete_keyboard,
+            parse_mode="HTML"
+        )
+        await callback.answer()
+    except Exception as e:
+        logging.error(f"Error showing delete menu: {e}")
+        await callback.answer("❌ Помилка при завантаженні", show_alert=True)
+
+@dp.callback_query(F.data.startswith("delete_"))
+async def confirm_delete_product(callback: types.CallbackQuery):
+    if not is_admin(callback.from_user.id):
+        return await callback.answer("❌ Немає доступу", show_alert=True)
+    
+    try:
+        product_id = int(callback.data.replace("delete_", ""))
+        product = get_product(product_id)
+        
+        if not product:
+            await callback.answer("❌ Товар не знайдено", show_alert=True)
+            return
+        
+        # Отримуємо дані товару
+        if isinstance(product, dict):
+            name = product.get('name', 'N/A')
+            price = product.get('price', 0)
+            category = product.get('category', 'N/A')
+        else:
+            name = product[1] if len(product) > 1 else 'N/A'
+            price = product[3] if len(product) > 3 else 0
+            category = product[5] if len(product) > 5 else 'N/A'
+        
+        # Створюємо клавіатуру підтвердження
+        confirm_keyboard = InlineKeyboardMarkup(inline_keyboard=[
+            [
+                InlineKeyboardButton(text="✅ Так, видалити", callback_data=f"confirm_delete_{product_id}"),
+                InlineKeyboardButton(text="❌ Скасувати", callback_data="delete_product_menu")
+            ]
+        ])
+        
+        await callback.message.edit_text(
+            f"🗑️ <b>Підтвердження видалення</b>\n\n"
+            f"📦 Товар: {name}\n"
+            f"💰 Ціна: {price} грн\n"
+            f"📁 Категорія: {category}\n\n"
+            f"Ви впевнені, що хочете видалити цей товар?",
+            reply_markup=confirm_keyboard,
+            parse_mode="HTML"
+        )
+        await callback.answer()
+    except Exception as e:
+        logging.error(f"Error confirming delete: {e}")
+        await callback.answer("❌ Помилка", show_alert=True)
+
+@dp.callback_query(F.data.startswith("confirm_delete_"))
+async def delete_product_confirmed(callback: types.CallbackQuery):
+    if not is_admin(callback.from_user.id):
+        return await callback.answer("❌ Немає доступу", show_alert=True)
+    
+    try:
+        product_id = int(callback.data.replace("confirm_delete_", ""))
+        delete_product(product_id)
+        
+        await callback.message.edit_text(
+            f"✅ <b>Товар #{product_id} успішно видалено!</b>",
+            parse_mode="HTML"
+        )
+        await callback.answer("✅ Видалено!")
+        
+        # Через 2 секунди повертаємо до адмін панелі
+        import asyncio
+        await asyncio.sleep(2)
+        await callback.message.edit_text(
+            "⚙️ <b>Панель адміністратора</b>\n\n"
+            "Оберіть потрібну дію:",
             reply_markup=get_admin_keyboard(),
             parse_mode="HTML"
         )
-        return await callback.answer()
-    
-    products_text = "📦 <b>Список товарів:</b>\n\n"
-    for p in products[:10]:  # Показуємо перші 10
-        products_text += (
-            f"🆔 #{p[0]} | {p[1]}\n"
-            f"💰 {p[3]} грн | 📁 {p[5]}\n\n"
-        )
-    
-    back_keyboard = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="🔙 Назад", callback_data="admin")]
-    ])
-    
-    await callback.message.edit_text(
-        products_text,
-        reply_markup=back_keyboard,
-        parse_mode="HTML"
-    )
-    await callback.answer()
+    except Exception as e:
+        logging.error(f"Error deleting product: {e}")
+        await callback.answer("❌ Помилка при видаленні", show_alert=True)
 
 # =======================
 # LIST ORDERS
@@ -387,34 +576,50 @@ async def list_orders_handler(callback: types.CallbackQuery):
     if not is_admin(callback.from_user.id):
         return await callback.answer("❌ Немає доступу", show_alert=True)
     
-    orders = get_recent_orders(10)
-    
-    if not orders:
+    try:
+        orders = get_recent_orders(10)
+        
+        if not orders:
+            await callback.message.edit_text(
+                "📊 <b>Замовлень поки немає</b>",
+                reply_markup=get_admin_keyboard(),
+                parse_mode="HTML"
+            )
+            return await callback.answer()
+        
+        orders_text = "📊 <b>Останні замовлення:</b>\n\n"
+        for o in orders:
+            # Перевіряємо чи це словник чи кортеж
+            if isinstance(o, dict):
+                order_id = o.get('id', 'N/A')
+                username = o.get('username', 'Unknown')
+                total = o.get('total', 0)
+                created_at = o.get('created_at', 'N/A')
+            else:
+                order_id = o[0] if len(o) > 0 else 'N/A'
+                username = o[2] if len(o) > 2 else 'Unknown'
+                total = o[4] if len(o) > 4 else 0
+                created_at = o[5] if len(o) > 5 else 'N/A'
+            
+            orders_text += (
+                f"🆔 #{order_id} | @{username or 'Unknown'}\n"
+                f"💰 {total} грн\n"
+                f"📅 {created_at}\n\n"
+            )
+        
+        back_keyboard = InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text="🔙 Назад", callback_data="admin")]
+        ])
+        
         await callback.message.edit_text(
-            "📊 <b>Замовлень поки немає</b>",
-            reply_markup=get_admin_keyboard(),
+            orders_text,
+            reply_markup=back_keyboard,
             parse_mode="HTML"
         )
-        return await callback.answer()
-    
-    orders_text = "📊 <b>Останні замовлення:</b>\n\n"
-    for o in orders:
-        orders_text += (
-            f"🆔 #{o[0]} | @{o[2] or 'Unknown'}\n"
-            f"💰 {o[4]} грн\n"
-            f"📅 {o[5]}\n\n"
-        )
-    
-    back_keyboard = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="🔙 Назад", callback_data="admin")]
-    ])
-    
-    await callback.message.edit_text(
-        orders_text,
-        reply_markup=back_keyboard,
-        parse_mode="HTML"
-    )
-    await callback.answer()
+        await callback.answer()
+    except Exception as e:
+        logging.error(f"Error listing orders: {e}")
+        await callback.answer("❌ Помилка при завантаженні замовлень", show_alert=True)
 
 # =======================
 # WEBHOOK APP
