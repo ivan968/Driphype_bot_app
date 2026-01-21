@@ -1,6 +1,7 @@
 import os
 import json
 import logging
+from datetime import datetime
 from aiohttp import web
 from dotenv import load_dotenv
 from aiogram import Bot, Dispatcher, types, F
@@ -32,6 +33,9 @@ WEBAPP_URL = os.getenv("WEBAPP_URL")
 ADMIN_ID = int(os.getenv("ADMIN_ID", "0"))
 PORT = int(os.getenv("PORT", 8000))
 
+# Payment provider token (отримайте від @BotFather)
+PAYMENT_TOKEN = os.getenv("PAYMENT_TOKEN", "")  # Додайте в .env
+
 # =======================
 # BOT INIT
 # =======================
@@ -53,6 +57,12 @@ class AddProduct(StatesGroup):
 
 class DeleteProduct(StatesGroup):
     confirm = State()
+
+class OrderCheckout(StatesGroup):
+    payment_method = State()
+    contact_info = State()
+    delivery_address = State()
+    confirmation = State()
 
 def is_admin(user_id: int) -> bool:
     return user_id == ADMIN_ID
@@ -114,6 +124,22 @@ def get_cancel_keyboard():
     return InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="❌ Скасувати", callback_data="cancel_add")]
     ])
+
+def get_payment_method_keyboard():
+    """Вибір способу оплати"""
+    keyboard = [
+        [InlineKeyboardButton(text="💳 Карта (Mono/Privat)", callback_data="payment_card")],
+        [InlineKeyboardButton(text="💵 Готівка при отриманні", callback_data="payment_cash")],
+        [InlineKeyboardButton(text="🌐 Crypto (USDT)", callback_data="payment_crypto")],
+    ]
+    
+    # Додаємо Telegram Payment якщо токен налаштовано
+    if PAYMENT_TOKEN:
+        keyboard.insert(0, [InlineKeyboardButton(text="⚡ Telegram Payment", callback_data="payment_telegram")])
+    
+    keyboard.append([InlineKeyboardButton(text="❌ Скасувати замовлення", callback_data="cancel_order")])
+    
+    return InlineKeyboardMarkup(inline_keyboard=keyboard)
 
 # =======================
 # START & MAIN MENU
@@ -356,24 +382,35 @@ async def cancel_add_product(callback: types.CallbackQuery, state: FSMContext):
 # WEB APP ORDERS
 # =======================
 @dp.message(F.content_type == types.ContentType.WEB_APP_DATA)
-async def web_app_data(message: types.Message):
+async def web_app_data(message: types.Message, state: FSMContext):
     try:
         data = json.loads(message.web_app_data.data)
-        order_id = add_order(
-            message.from_user.id,
-            message.from_user.username,
-            json.dumps(data["products"]),
-            data["total"]
+        
+        # Зберігаємо дані замовлення в FSM
+        await state.update_data(
+            products=data["products"],
+            total=data["total"],
+            user_id=message.from_user.id,
+            username=message.from_user.username
         )
         
-        order_text = (
-            "✅ <b>Замовлення прийнято!</b>\n\n"
-            f"🆔 Номер: #{order_id}\n"
-            f"💰 Сума: {data['total']} грн\n\n"
-            "📞 Ми зв'яжемося з вами найближчим часом!"
-        )
+        # Формуємо деталі замовлення
+        order_details = "🛒 <b>Ваше замовлення:</b>\n\n"
+        for item in data["products"]:
+            order_details += f"• {item.get('name', 'Товар')}\n"
+            order_details += f"  Розмір: {item.get('size', 'N/A')} | Кількість: {item.get('quantity', 1)}\n"
+            order_details += f"  Ціна: {item.get('price', 0)} грн\n\n"
         
-        await message.answer(order_text, parse_mode="HTML")
+        order_details += f"💰 <b>Загальна сума:</b> {data['total']} грн\n\n"
+        order_details += "Оберіть спосіб оплати:"
+        
+        # Переходимо до вибору оплати
+        await state.set_state(OrderCheckout.payment_method)
+        await message.answer(
+            order_details,
+            reply_markup=get_payment_method_keyboard(),
+            parse_mode="HTML"
+        )
         
     except Exception as e:
         logging.error(f"Error processing order: {e}")
@@ -382,6 +419,219 @@ async def web_app_data(message: types.Message):
             "Спробуйте ще раз або зв'яжіться з підтримкою",
             parse_mode="HTML"
         )
+
+# =======================
+# PAYMENT METHOD SELECTION
+# =======================
+@dp.callback_query(F.data.startswith("payment_"))
+async def process_payment_method(callback: types.CallbackQuery, state: FSMContext):
+    payment_type = callback.data.replace("payment_", "")
+    
+    await state.update_data(payment_method=payment_type)
+    
+    # Telegram Payment (вбудована оплата)
+    if payment_type == "telegram" and PAYMENT_TOKEN:
+        data = await state.get_data()
+        
+        # Створюємо інвойс для оплати
+        prices = [types.LabeledPrice(label=f"Замовлення на суму", amount=int(data['total'] * 100))]
+        
+        await bot.send_invoice(
+            chat_id=callback.from_user.id,
+            title="Оплата замовлення DripHype",
+            description=f"Замовлення на суму {data['total']} грн",
+            payload=f"order_{callback.from_user.id}_{int(datetime.now().timestamp())}",
+            provider_token=PAYMENT_TOKEN,
+            currency="UAH",
+            prices=prices,
+            start_parameter="payment"
+        )
+        
+        await callback.message.edit_text(
+            "⚡ <b>Telegram Payment</b>\n\n"
+            "Інвойс для оплати надіслано вище ⬆️\n"
+            "Натисніть на нього для оплати.",
+            parse_mode="HTML"
+        )
+        await callback.answer()
+        return
+    
+    # Різні повідомлення залежно від способу оплати
+    if payment_type == "card":
+        payment_info = (
+            "💳 <b>Оплата карткою</b>\n\n"
+            "Реквізити для оплати:\n\n"
+            "🇺🇦 <b>Monobank UAH:</b>\n"
+            "<code>4441111039295377</code>\n"
+            "👤 IVAN POLISHCHUK\n\n"
+            "🇪🇺 <b>Monobank EUR:</b>\n"
+            "<code>4441114498081411</code>\n"
+            "👤 IVAN POLISHCHUK\n\n"
+            "📝 <b>Після оплати надішліть:</b>\n"
+            "• Скріншот оплати\n"
+            "• Ваш номер телефону\n"
+            "• Адресу доставки\n\n"
+            "💡 Натисніть на номер картки щоб скопіювати"
+        )
+    elif payment_type == "crypto":
+        payment_info = (
+            "🌐 <b>Оплата Crypto (USDT)</b>\n\n"
+            "💰 <b>Мережа:</b> TRC20 (Tron)\n"
+            "📍 <b>Адреса:</b>\n"
+            "<code>TM5KWjAek61129Br8Ap3e1jvUWAuLvsoTE</code>\n\n"
+            "⚠️ <b>ВАЖЛИВО:</b>\n"
+            "• Використовуйте тільки мережу TRC20\n"
+            "• Перевірте адресу перед відправкою\n"
+            "• Мінімальна сума: 10 USDT\n\n"
+            "📝 <b>Після оплати надішліть:</b>\n"
+            "• Hash транзакції (TxID)\n"
+            "• Ваш номер телефону\n"
+            "• Адресу доставки\n\n"
+            "💡 Натисніть на адресу щоб скопіювати"
+        )
+    else:  # cash
+        payment_info = (
+            "💵 <b>Оплата при отриманні</b>\n\n"
+            "Ви зможете оплатити замовлення готівкою при отриманні.\n\n"
+            "📝 Надішліть ваші контактні дані:\n"
+            "• Номер телефону\n"
+            "• Адресу доставки"
+        )
+    
+    await state.set_state(OrderCheckout.contact_info)
+    await callback.message.edit_text(
+        payment_info,
+        parse_mode="HTML"
+    )
+    await callback.answer()
+
+# =======================
+# TELEGRAM PAYMENT HANDLERS
+# =======================
+@dp.pre_checkout_query()
+async def process_pre_checkout_query(pre_checkout_query: types.PreCheckoutQuery):
+    """Обробка pre-checkout запиту"""
+    await bot.answer_pre_checkout_query(pre_checkout_query.id, ok=True)
+
+@dp.message(F.successful_payment)
+async def process_successful_payment(message: types.Message, state: FSMContext):
+    """Обробка успішної оплати через Telegram Payment"""
+    data = await state.get_data()
+    
+    # Зберігаємо замовлення
+    order_id = add_order(
+        message.from_user.id,
+        message.from_user.username,
+        json.dumps(data.get('products', [])),
+        message.successful_payment.total_amount / 100
+    )
+    
+    success_message = (
+        "✅ <b>Оплата успішна!</b>\n\n"
+        f"🆔 Замовлення: #{order_id}\n"
+        f"💰 Оплачено: {message.successful_payment.total_amount / 100} {message.successful_payment.currency}\n\n"
+        "📦 Ваше замовлення в обробці.\n"
+        "Ми зв'яжемося з вами для уточнення адреси доставки."
+    )
+    
+    await message.answer(success_message, parse_mode="HTML")
+    
+    # Повідомлення адміну
+    if ADMIN_ID:
+        admin_msg = (
+            f"💰 <b>ОПЛАЧЕНЕ ЗАМОВЛЕННЯ #{order_id}</b>\n\n"
+            f"👤 @{message.from_user.username or 'Unknown'}\n"
+            f"💵 Сума: {message.successful_payment.total_amount / 100} грн\n"
+            f"💳 Telegram Payment\n"
+        )
+        try:
+            await bot.send_message(ADMIN_ID, admin_msg, parse_mode="HTML")
+        except:
+            pass
+    
+    await state.clear()
+
+# =======================
+# CONTACT INFO & DELIVERY
+# =======================
+@dp.message(OrderCheckout.contact_info)
+async def process_contact_info(message: types.Message, state: FSMContext):
+    await state.update_data(contact_info=message.text)
+    
+    data = await state.get_data()
+    payment_method = data.get('payment_method', 'card')
+    
+    # Формуємо підсумок замовлення
+    summary = "✅ <b>Підтвердження замовлення</b>\n\n"
+    summary += "📦 <b>Товари:</b>\n"
+    
+    for item in data['products']:
+        summary += f"• {item.get('name', 'Товар')} (Розмір: {item.get('size', 'N/A')})\n"
+    
+    summary += f"\n💰 <b>Сума:</b> {data['total']} грн\n"
+    
+    if payment_method == "card":
+        summary += "💳 <b>Оплата:</b> Карткою\n"
+    elif payment_method == "crypto":
+        summary += "🌐 <b>Оплата:</b> Crypto (USDT)\n"
+    else:
+        summary += "💵 <b>Оплата:</b> При отриманні\n"
+    
+    summary += f"\n📞 <b>Контакти:</b>\n{message.text}\n\n"
+    summary += "Ваше замовлення прийнято! ✅\n"
+    summary += "Ми зв'яжемося з вами найближчим часом для підтвердження."
+    
+    # Зберігаємо замовлення в БД
+    try:
+        order_id = add_order(
+            data['user_id'],
+            data.get('username'),
+            json.dumps(data['products']),
+            data['total']
+        )
+        
+        # Відправляємо підтвердження користувачу
+        await message.answer(
+            summary,
+            parse_mode="HTML"
+        )
+        
+        # Відправляємо повідомлення адміну
+        if ADMIN_ID:
+            admin_notification = (
+                f"🔔 <b>НОВЕ ЗАМОВЛЕННЯ #{order_id}</b>\n\n"
+                f"👤 Користувач: @{data.get('username', 'Unknown')}\n"
+                f"💰 Сума: {data['total']} грн\n"
+                f"💳 Оплата: {payment_method}\n\n"
+                f"📞 Контакти:\n{message.text}\n\n"
+                f"📦 Товари:\n"
+            )
+            for item in data['products']:
+                admin_notification += f"• {item.get('name', 'Товар')} (Розмір: {item.get('size', 'N/A')})\n"
+            
+            try:
+                await bot.send_message(ADMIN_ID, admin_notification, parse_mode="HTML")
+            except Exception as e:
+                logging.error(f"Failed to send admin notification: {e}")
+        
+    except Exception as e:
+        logging.error(f"Error saving order: {e}")
+        await message.answer(
+            "❌ Помилка при збереженні замовлення. Зв'яжіться з підтримкою.",
+            parse_mode="HTML"
+        )
+    
+    await state.clear()
+
+@dp.callback_query(F.data == "cancel_order")
+async def cancel_order(callback: types.CallbackQuery, state: FSMContext):
+    await state.clear()
+    await callback.message.edit_text(
+        "❌ <b>Замовлення скасовано</b>\n\n"
+        "Ви можете оформити нове замовлення в будь-який час через магазин.",
+        parse_mode="HTML"
+    )
+    await callback.answer()
 
 # =======================
 # LIST PRODUCTS
