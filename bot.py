@@ -36,6 +36,9 @@ PORT = int(os.getenv("PORT", 8000))
 # Payment provider token (отримайте від @BotFather)
 PAYMENT_TOKEN = os.getenv("PAYMENT_TOKEN", "")  # Додайте в .env
 
+# Група для замовлень (опціонально, можна залишити пустим)
+ORDERS_GROUP_ID = os.getenv("ORDERS_GROUP_ID", "")  # ID групи для замовлень
+
 # =======================
 # BOT INIT
 # =======================
@@ -561,7 +564,7 @@ async def process_contact_info(message: types.Message, state: FSMContext):
     data = await state.get_data()
     payment_method = data.get('payment_method', 'card')
     
-    # Формуємо підсумок замовлення
+    # Формуємо підсумок замовлення для клієнта
     summary = "✅ <b>Підтвердження замовлення</b>\n\n"
     summary += "📦 <b>Товари:</b>\n"
     
@@ -596,23 +599,69 @@ async def process_contact_info(message: types.Message, state: FSMContext):
             parse_mode="HTML"
         )
         
-        # Відправляємо повідомлення адміну
+        # Формуємо повідомлення для адміна/групи
+        admin_notification = (
+            f"🔔 <b>НОВЕ ЗАМОВЛЕННЯ #{order_id}</b>\n\n"
+            f"👤 Користувач: @{data.get('username', 'Unknown')} (ID: {data['user_id']})\n"
+            f"💰 Сума: {data['total']} грн\n"
+        )
+        
+        if payment_method == "card":
+            admin_notification += "💳 Оплата: Карта Monobank\n\n"
+        elif payment_method == "crypto":
+            admin_notification += "🌐 Оплата: USDT TRC20\n\n"
+        else:
+            admin_notification += "💵 Оплата: При отриманні\n\n"
+        
+        admin_notification += f"📞 <b>Контактні дані:</b>\n{message.text}\n\n"
+        admin_notification += "📦 <b>Товари:</b>\n"
+        
+        for item in data['products']:
+            admin_notification += f"• {item.get('name', 'Товар')} (Розмір: {item.get('size', 'N/A')})\n"
+        
+        # Відправляємо адміну особисто
         if ADMIN_ID:
-            admin_notification = (
-                f"🔔 <b>НОВЕ ЗАМОВЛЕННЯ #{order_id}</b>\n\n"
-                f"👤 Користувач: @{data.get('username', 'Unknown')}\n"
-                f"💰 Сума: {data['total']} грн\n"
-                f"💳 Оплата: {payment_method}\n\n"
-                f"📞 Контакти:\n{message.text}\n\n"
-                f"📦 Товари:\n"
-            )
-            for item in data['products']:
-                admin_notification += f"• {item.get('name', 'Товар')} (Розмір: {item.get('size', 'N/A')})\n"
-            
             try:
                 await bot.send_message(ADMIN_ID, admin_notification, parse_mode="HTML")
+                
+                # Пересилаємо всі фото/документи які надіслав клієнт
+                if message.photo:
+                    await bot.send_photo(
+                        ADMIN_ID,
+                        message.photo[-1].file_id,
+                        caption=f"💳 Скріншот оплати для замовлення #{order_id}"
+                    )
+                elif message.document:
+                    await bot.send_document(
+                        ADMIN_ID,
+                        message.document.file_id,
+                        caption=f"📄 Документ для замовлення #{order_id}"
+                    )
+                    
             except Exception as e:
                 logging.error(f"Failed to send admin notification: {e}")
+        
+        # Якщо вказана група - відправляємо туди теж
+        if ORDERS_GROUP_ID:
+            try:
+                group_id = int(ORDERS_GROUP_ID)
+                await bot.send_message(group_id, admin_notification, parse_mode="HTML")
+                
+                if message.photo:
+                    await bot.send_photo(
+                        group_id,
+                        message.photo[-1].file_id,
+                        caption=f"💳 Скріншот оплати для замовлення #{order_id}"
+                    )
+                elif message.document:
+                    await bot.send_document(
+                        group_id,
+                        message.document.file_id,
+                        caption=f"📄 Документ для замовлення #{order_id}"
+                    )
+                    
+            except Exception as e:
+                logging.error(f"Failed to send group notification: {e}")
         
     except Exception as e:
         logging.error(f"Error saving order: {e}")
