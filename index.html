@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>DRIPHYPE - Dark</title>
+    <title>DRIPHYPE - Premium Shop</title>
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <style>
         * {
@@ -21,20 +21,137 @@
             color: #fff;
         }
 
+        .loader-wrapper {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: #0a0a0a;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 9999;
+            transition: opacity 0.5s ease, visibility 0.5s ease;
+        }
+
+        .loader-wrapper.hidden {
+            opacity: 0;
+            visibility: hidden;
+        }
+
+        .loader-content {
+            text-align: center;
+        }
+
+        .loader-logo {
+            font-size: 72px;
+            animation: pulse 1.5s ease-in-out infinite;
+            margin-bottom: 20px;
+        }
+
+        .loader-text {
+            font-size: 32px;
+            font-weight: 700;
+            background: linear-gradient(45deg, #c084fc, #fff, #c084fc);
+            background-size: 200% 200%;
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            animation: gradientFlow 3s ease infinite;
+            margin-bottom: 30px;
+        }
+
+        .loader-bar {
+            width: 200px;
+            height: 4px;
+            background: #1a1a1a;
+            border-radius: 10px;
+            overflow: hidden;
+            margin: 0 auto;
+        }
+
+        .loader-progress {
+            height: 100%;
+            background: linear-gradient(90deg, #c084fc, #fff);
+            border-radius: 10px;
+            animation: loading 2s ease-in-out infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.1); }
+        }
+
+        @keyframes gradientFlow {
+            0% { background-position: 0% 50%; }
+            50% { background-position: 100% 50%; }
+            100% { background-position: 0% 50%; }
+        }
+
+        @keyframes loading {
+            0% { width: 0%; transform: translateX(0); }
+            50% { width: 100%; transform: translateX(0); }
+            100% { width: 100%; transform: translateX(200px); }
+        }
+
         .container {
             max-width: 800px;
             margin: 0 auto;
             padding: 0 15px;
+            opacity: 0;
+            animation: fadeInUp 0.8s ease forwards;
+            animation-delay: 0.3s;
+        }
+
+        @keyframes fadeInUp {
+            from {
+                opacity: 0;
+                transform: translateY(30px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
         }
 
         .header {
-            background: #1a1a1a;
+            background: linear-gradient(135deg, #1a1a1a 0%, #2a2a2a 100%);
             border-radius: 20px;
             padding: 25px;
             margin-bottom: 25px;
-            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+            box-shadow: 0 10px 40px rgba(192, 132, 252, 0.2);
             text-align: center;
             border: 1px solid #333;
+            position: relative;
+            overflow: hidden;
+            animation: slideDown 0.6s ease;
+        }
+
+        .header::before {
+            content: '';
+            position: absolute;
+            top: -50%;
+            left: -50%;
+            width: 200%;
+            height: 200%;
+            background: radial-gradient(circle, rgba(192, 132, 252, 0.1) 0%, transparent 70%);
+            animation: rotate 20s linear infinite;
+        }
+
+        @keyframes rotate {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+
+        @keyframes slideDown {
+            from {
+                opacity: 0;
+                transform: translateY(-50px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
         }
 
         .header h1 {
@@ -42,11 +159,16 @@
             font-size: 32px;
             margin-bottom: 10px;
             font-weight: 700;
+            position: relative;
+            z-index: 1;
+            text-shadow: 0 0 20px rgba(192, 132, 252, 0.5);
         }
 
         .header p {
             color: #aaa;
             font-size: 14px;
+            position: relative;
+            z-index: 1;
         }
 
         .api-status {
@@ -55,11 +177,20 @@
             border-radius: 10px;
             font-size: 12px;
             margin-top: 10px;
+            position: relative;
+            z-index: 1;
+            animation: fadeIn 1s ease;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
         }
 
         .api-status.online {
             background: #c084fc;
             color: #000;
+            box-shadow: 0 0 20px rgba(192, 132, 252, 0.5);
         }
 
         .api-status.offline {
@@ -74,6 +205,21 @@
             overflow-x: auto;
             padding: 10px 0;
             -webkit-overflow-scrolling: touch;
+            animation: slideInLeft 0.8s ease;
+            animation-delay: 0.4s;
+            opacity: 0;
+            animation-fill-mode: forwards;
+        }
+
+        @keyframes slideInLeft {
+            from {
+                opacity: 0;
+                transform: translateX(-50px);
+            }
+            to {
+                opacity: 1;
+                transform: translateX(0);
+            }
         }
 
         .category-btn {
@@ -86,7 +232,27 @@
             font-weight: 600;
             cursor: pointer;
             white-space: nowrap;
-            transition: all 0.3s ease;
+            transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .category-btn::before {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 0;
+            height: 0;
+            border-radius: 50%;
+            background: rgba(255, 255, 255, 0.2);
+            transform: translate(-50%, -50%);
+            transition: width 0.6s, height 0.6s;
+        }
+
+        .category-btn:active::before {
+            width: 300px;
+            height: 300px;
         }
 
         .category-btn:active {
@@ -94,9 +260,11 @@
         }
 
         .category-btn.active {
-            background: #ffffff;
+            background: linear-gradient(135deg, #c084fc 0%, #fff 100%);
             color: #000;
             border-color: #fff;
+            box-shadow: 0 5px 15px rgba(192, 132, 252, 0.4);
+            transform: translateY(-2px);
         }
 
         .products-grid {
@@ -107,12 +275,49 @@
         }
 
         .product-card {
-            background: #1a1a1a;
+            background: linear-gradient(135deg, #1a1a1a 0%, #2a2a2a 100%);
             border-radius: 15px;
             overflow: hidden;
             cursor: pointer;
-            transition: all 0.3s ease;
+            transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
             border: 1px solid #333;
+            opacity: 0;
+            animation: fadeInScale 0.6s ease forwards;
+            position: relative;
+        }
+
+        .product-card:nth-child(1) { animation-delay: 0.1s; }
+        .product-card:nth-child(2) { animation-delay: 0.2s; }
+        .product-card:nth-child(3) { animation-delay: 0.3s; }
+        .product-card:nth-child(4) { animation-delay: 0.4s; }
+        .product-card:nth-child(5) { animation-delay: 0.5s; }
+        .product-card:nth-child(6) { animation-delay: 0.6s; }
+
+        @keyframes fadeInScale {
+            from {
+                opacity: 0;
+                transform: scale(0.8) translateY(20px);
+            }
+            to {
+                opacity: 1;
+                transform: scale(1) translateY(0);
+            }
+        }
+
+        .product-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: linear-gradient(135deg, rgba(192, 132, 252, 0.2) 0%, transparent 50%);
+            opacity: 0;
+            transition: opacity 0.4s ease;
+        }
+
+        .product-card:hover::before {
+            opacity: 1;
         }
 
         .product-card:active {
@@ -120,8 +325,9 @@
         }
 
         .product-card:hover {
-            transform: translateY(-5px);
+            transform: translateY(-8px) scale(1.02);
             border-color: #c084fc;
+            box-shadow: 0 15px 40px rgba(192, 132, 252, 0.3);
         }
 
         .product-image {
@@ -129,10 +335,17 @@
             height: 200px;
             object-fit: cover;
             background: #0a0a0a;
+            transition: transform 0.6s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+
+        .product-card:hover .product-image {
+            transform: scale(1.1);
         }
 
         .product-info {
             padding: 15px;
+            position: relative;
+            z-index: 1;
         }
 
         .product-type {
@@ -141,6 +354,12 @@
             font-weight: 600;
             text-transform: uppercase;
             margin-bottom: 5px;
+            animation: shimmer 2s ease-in-out infinite;
+        }
+
+        @keyframes shimmer {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.7; }
         }
 
         .product-name {
@@ -158,6 +377,7 @@
             font-size: 18px;
             font-weight: 700;
             color: #c084fc;
+            text-shadow: 0 0 10px rgba(192, 132, 252, 0.5);
         }
 
         .cart-btn {
@@ -165,7 +385,7 @@
             bottom: 20px;
             left: 50%;
             transform: translateX(-50%);
-            background: #ffffff;
+            background: linear-gradient(135deg, #fff 0%, #c084fc 100%);
             color: #000;
             border: none;
             padding: 15px 40px;
@@ -173,11 +393,37 @@
             font-size: 16px;
             font-weight: 700;
             cursor: pointer;
-            box-shadow: 0 10px 30px rgba(255,255,255,0.2);
+            box-shadow: 0 10px 40px rgba(255, 255, 255, 0.3);
             display: flex;
             align-items: center;
             gap: 10px;
             z-index: 1000;
+            transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+
+        .cart-btn.show {
+            animation: bounceIn 0.6s ease forwards;
+        }
+
+        @keyframes bounceIn {
+            0% {
+                transform: translateX(-50%) scale(0);
+            }
+            50% {
+                transform: translateX(-50%) scale(1.1);
+            }
+            100% {
+                transform: translateX(-50%) scale(1);
+            }
+        }
+
+        .cart-btn:hover {
+            transform: translateX(-50%) scale(1.05);
+            box-shadow: 0 15px 50px rgba(255, 255, 255, 0.4);
+        }
+
+        .cart-btn:active {
+            transform: translateX(-50%) scale(0.95);
         }
 
         .cart-count {
@@ -190,6 +436,13 @@
             align-items: center;
             justify-content: center;
             font-size: 14px;
+            animation: pop 0.4s ease;
+        }
+
+        @keyframes pop {
+            0% { transform: scale(0); }
+            50% { transform: scale(1.2); }
+            100% { transform: scale(1); }
         }
 
         .modal {
@@ -199,26 +452,41 @@
             left: 0;
             width: 100%;
             height: 100%;
-            background: rgba(0,0,0,0.95);
+            background: rgba(0, 0, 0, 0.95);
             z-index: 2000;
             padding: 20px;
             overflow-y: auto;
+            backdrop-filter: blur(10px);
         }
 
         .modal.active {
             display: flex;
             align-items: center;
             justify-content: center;
+            animation: fadeIn 0.3s ease;
         }
 
         .modal-content {
-            background: #1a1a1a;
+            background: linear-gradient(135deg, #1a1a1a 0%, #2a2a2a 100%);
             border-radius: 20px;
             max-width: 500px;
             width: 100%;
             max-height: 90vh;
             overflow-y: auto;
             border: 1px solid #333;
+            animation: modalSlideUp 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            box-shadow: 0 20px 60px rgba(192, 132, 252, 0.3);
+        }
+
+        @keyframes modalSlideUp {
+            from {
+                opacity: 0;
+                transform: translateY(50px) scale(0.9);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0) scale(1);
+            }
         }
 
         .modal-image {
@@ -233,7 +501,7 @@
 
         .modal-type {
             display: inline-block;
-            background: #c084fc;
+            background: linear-gradient(135deg, #c084fc 0%, #fff 100%);
             color: #000;
             padding: 5px 15px;
             border-radius: 20px;
@@ -260,6 +528,7 @@
             font-weight: 700;
             color: #c084fc;
             margin-bottom: 20px;
+            text-shadow: 0 0 20px rgba(192, 132, 252, 0.5);
         }
 
         .sizes {
@@ -287,13 +556,20 @@
             border-radius: 10px;
             cursor: pointer;
             font-weight: 600;
-            transition: all 0.3s ease;
+            transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+
+        .size-btn:hover {
+            transform: translateY(-2px);
+            border-color: #c084fc;
         }
 
         .size-btn.selected {
             border-color: #c084fc;
-            background: #c084fc;
+            background: linear-gradient(135deg, #c084fc 0%, #fff 100%);
             color: #000;
+            box-shadow: 0 5px 15px rgba(192, 132, 252, 0.4);
+            transform: scale(1.05);
         }
 
         .modal-actions {
@@ -309,17 +585,28 @@
             font-size: 16px;
             font-weight: 600;
             cursor: pointer;
-            transition: all 0.3s ease;
+            transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
         }
 
         .btn-primary {
-            background: #c084fc;
+            background: linear-gradient(135deg, #c084fc 0%, #fff 100%);
             color: #000;
+            box-shadow: 0 5px 15px rgba(192, 132, 252, 0.3);
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 20px rgba(192, 132, 252, 0.4);
         }
 
         .btn-secondary {
             background: #333;
             color: #fff;
+        }
+
+        .btn-secondary:hover {
+            background: #444;
+            transform: translateY(-2px);
         }
 
         .btn:active {
@@ -338,6 +625,12 @@
             border-radius: 12px;
             margin-bottom: 15px;
             border: 1px solid #333;
+            transition: all 0.3s ease;
+        }
+
+        .cart-item:hover {
+            border-color: #c084fc;
+            transform: translateX(-5px);
         }
 
         .cart-item-image {
@@ -377,15 +670,22 @@
             font-size: 12px;
             cursor: pointer;
             margin-top: 5px;
+            transition: all 0.3s ease;
+        }
+
+        .cart-item-remove:hover {
+            background: #ff6666;
+            transform: scale(1.05);
         }
 
         .cart-total {
-            background: #c084fc;
+            background: linear-gradient(135deg, #c084fc 0%, #fff 100%);
             color: #000;
             padding: 20px;
             border-radius: 15px;
             margin: 20px 0;
             text-align: center;
+            box-shadow: 0 10px 30px rgba(192, 132, 252, 0.3);
         }
 
         .cart-total-label {
@@ -407,6 +707,12 @@
         .empty-cart-icon {
             font-size: 64px;
             margin-bottom: 20px;
+            animation: bounce 2s ease-in-out infinite;
+        }
+
+        @keyframes bounce {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-10px); }
         }
 
         .loading {
@@ -417,7 +723,7 @@
         }
 
         .refresh-btn {
-            background: #1a1a1a;
+            background: linear-gradient(135deg, #1a1a1a 0%, #2a2a2a 100%);
             color: #fff;
             border: 1px solid #333;
             padding: 10px 20px;
@@ -426,19 +732,58 @@
             font-weight: 600;
             cursor: pointer;
             margin-bottom: 20px;
+            transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+
+        .refresh-btn:hover {
+            background: linear-gradient(135deg, #2a2a2a 0%, #3a3a3a 100%);
+            border-color: #c084fc;
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(192, 132, 252, 0.2);
+        }
+
+        .refresh-btn:active {
+            transform: scale(0.95);
         }
 
         .error-message {
-            background: #ff4444;
+            background: linear-gradient(135deg, #ff4444 0%, #ff6666 100%);
             color: white;
             padding: 15px;
             border-radius: 10px;
             margin-bottom: 20px;
             text-align: center;
         }
+
+        ::-webkit-scrollbar {
+            width: 8px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: #1a1a1a;
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: #c084fc;
+            border-radius: 10px;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: #fff;
+        }
     </style>
 </head>
 <body>
+    <div class="loader-wrapper" id="loader">
+        <div class="loader-content">
+            <div class="loader-logo">🖤</div>
+            <div class="loader-text">DRIPHYPE</div>
+            <div class="loader-bar">
+                <div class="loader-progress"></div>
+            </div>
+        </div>
+    </div>
+
     <div class="container">
         <div class="header">
             <h1>🖤 DRIPHYPE</h1>
@@ -498,12 +843,18 @@
     </div>
 
     <script>
+        window.addEventListener('load', () => {
+            setTimeout(() => {
+                document.getElementById('loader').classList.add('hidden');
+            }, 2000);
+        });
+
         const tg = window.Telegram.WebApp;
         tg.expand();
         tg.MainButton.hide();
 
         const API_URL = 'https://driphype-api.onrender.com';
-        const ADMIN_ID = 868560006; // Твій Telegram ID
+        const ADMIN_ID = 868560006;
 
         let products = [];
         let cart = [];
@@ -512,7 +863,6 @@
         let currentCategory = 'all';
         let isApiOnline = false;
         
-        // Перевірка чи користувач - адмін
         const isAdmin = tg.initDataUnsafe?.user?.id === ADMIN_ID;
 
         const demoProducts = [
@@ -549,7 +899,6 @@
         ];
 
         async function loadProducts() {
-            console.log('🔄 Завантаження товарів з API...');
             const errorContainer = document.getElementById('errorContainer');
             const apiStatus = document.getElementById('apiStatus');
             
@@ -558,57 +907,35 @@
             try {
                 const response = await fetch(`${API_URL}/api/products`, {
                     method: 'GET',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
+                    headers: {'Content-Type': 'application/json'},
                     mode: 'cors'
                 });
                 
-                if (!response.ok) {
-                    throw new Error(`API помилка: ${response.status}`);
-                }
+                if (!response.ok) throw new Error(`API помилка: ${response.status}`);
                 
                 const data = await response.json();
-                
-                if (data.error) {
-                    throw new Error(data.error);
-                }
+                if (data.error) throw new Error(data.error);
                 
                 products = data;
                 isApiOnline = true;
                 
-                // Показувати статус тільки адміну
                 if (isAdmin) {
                     apiStatus.className = 'api-status online';
                     apiStatus.textContent = '✅ З\'єднано з API';
-                    console.log('✅ Товари успішно завантажені з API:', products.length);
                 } else {
-                    apiStatus.style.display = 'none'; // Приховати для користувачів
+                    apiStatus.style.display = 'none';
                 }
                 
             } catch (error) {
-                // Логи тільки для адміна
-                if (isAdmin) {
-                    console.warn('⚠️ Помилка API, використовуються демо-товари:', error.message);
-                }
-                
                 products = demoProducts;
                 isApiOnline = false;
                 
-                // Повідомлення тільки для адміна
                 if (isAdmin) {
                     apiStatus.className = 'api-status offline';
                     apiStatus.textContent = '⚠️ Демо режим';
-                    
-                    errorContainer.innerHTML = `
-                        <div class="error-message">
-                            ⚠️ API тимчасово недоступне. Показані демо-товари.
-                            <br><small>Переконайтесь що api_server.py запущено на Render</small>
-                        </div>
-                    `;
+                    errorContainer.innerHTML = `<div class="error-message">⚠️ API тимчасово недоступне. Показані демо-товари.</div>`;
                 } else {
-                    apiStatus.style.display = 'none'; // Приховати для користувачів
-                    // Користувачі просто бачать товари без повідомлень про помилки
+                    apiStatus.style.display = 'none';
                 }
             }
 
@@ -714,9 +1041,11 @@
             
             if (count > 0) {
                 cartBtn.style.display = 'flex';
+                cartBtn.classList.add('show');
                 cartCount.textContent = count;
             } else {
                 cartBtn.style.display = 'none';
+                cartBtn.classList.remove('show');
             }
         }
 
@@ -799,7 +1128,6 @@
 
         loadProducts();
         
-        // Приховати кнопку оновлення для не-адмінів
         if (!isAdmin) {
             document.getElementById('refreshBtn').style.display = 'none';
         }
@@ -812,5 +1140,3 @@
     </script>
 </body>
 </html>
-
-
