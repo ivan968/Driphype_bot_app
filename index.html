@@ -198,6 +198,59 @@
             color: #000;
         }
 
+        .language-switcher {
+            display: flex;
+            gap: 8px;
+            justify-content: center;
+            margin-top: 15px;
+            position: relative;
+            z-index: 1;
+        }
+
+        .lang-btn {
+            background: #0a0a0a;
+            color: #fff;
+            border: 1px solid #333;
+            padding: 8px 15px;
+            border-radius: 15px;
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .lang-btn::before {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 0;
+            height: 0;
+            border-radius: 50%;
+            background: rgba(192, 132, 252, 0.3);
+            transform: translate(-50%, -50%);
+            transition: width 0.4s, height 0.4s;
+        }
+
+        .lang-btn:active::before {
+            width: 200px;
+            height: 200px;
+        }
+
+        .lang-btn:hover {
+            border-color: #c084fc;
+            transform: translateY(-2px);
+        }
+
+        .lang-btn.active {
+            background: linear-gradient(135deg, #c084fc 0%, #fff 100%);
+            color: #000;
+            border-color: #fff;
+            box-shadow: 0 3px 10px rgba(192, 132, 252, 0.4);
+        }
+
         .categories {
             display: flex;
             gap: 10px;
@@ -787,8 +840,13 @@
     <div class="container">
         <div class="header">
             <h1>🖤 DRIPHYPE</h1>
-            <p>Premium Shop</p>
+            <p id="headerSubtitle">Premium Shop</p>
             <div class="api-status" id="apiStatus">🔄 З'єднання...</div>
+            <div class="language-switcher">
+                <button class="lang-btn active" data-lang="uk">🇺🇦 UA</button>
+                <button class="lang-btn" data-lang="ru">🇷🇺 RU</button>
+                <button class="lang-btn" data-lang="en">🇬🇧 EN</button>
+            </div>
         </div>
 
         <button class="refresh-btn" id="refreshBtn" onclick="loadProducts()">🔄 Оновити товари</button>
@@ -843,6 +901,136 @@
     </div>
 
     <script>
+        // Translations
+        const translations = {
+            uk: {
+                headerSubtitle: 'Premium Shop',
+                connecting: '🔄 З\'єднання...',
+                connected: '✅ З\'єднано з API',
+                demoMode: '⚠️ Демо режим',
+                refresh: '🔄 Оновити товари',
+                all: 'Всі',
+                mens: 'Чоловіче',
+                womens: 'Жіноче',
+                accessories: 'Аксесуари',
+                loading: 'Завантаження товарів...',
+                notFound: 'Товарів не знайдено',
+                cart: '🛒 Кошик',
+                yourCart: '🛒 Ваш кошик',
+                selectSize: 'Оберіть розмір:',
+                close: 'Закрити',
+                addToCart: 'Додати в кошик',
+                remove: 'Видалити',
+                size: 'Розмір',
+                total: 'Загальна сума:',
+                continueShopping: 'Продовжити покупки',
+                checkout: 'Оформити замовлення',
+                emptyCart: 'Ваш кошик порожній',
+                selectSizeAlert: 'Будь ласка, оберіть розмір',
+                addedToCart: 'Товар додано до кошика!',
+                apiError: '⚠️ API тимчасово недоступне. Показані демо-товари.',
+                currency: 'грн'
+            },
+            ru: {
+                headerSubtitle: 'Premium Shop',
+                connecting: '🔄 Подключение...',
+                connected: '✅ Подключено к API',
+                demoMode: '⚠️ Демо режим',
+                refresh: '🔄 Обновить товары',
+                all: 'Все',
+                mens: 'Мужское',
+                womens: 'Женское',
+                accessories: 'Аксессуары',
+                loading: 'Загрузка товаров...',
+                notFound: 'Товары не найдены',
+                cart: '🛒 Корзина',
+                yourCart: '🛒 Ваша корзина',
+                selectSize: 'Выберите размер:',
+                close: 'Закрыть',
+                addToCart: 'Добавить в корзину',
+                remove: 'Удалить',
+                size: 'Размер',
+                total: 'Общая сумма:',
+                continueShopping: 'Продолжить покупки',
+                checkout: 'Оформить заказ',
+                emptyCart: 'Ваша корзина пуста',
+                selectSizeAlert: 'Пожалуйста, выберите размер',
+                addedToCart: 'Товар добавлен в корзину!',
+                apiError: '⚠️ API временно недоступно. Показаны демо-товары.',
+                currency: '€'
+            },
+            en: {
+                headerSubtitle: 'Premium Shop',
+                connecting: '🔄 Connecting...',
+                connected: '✅ Connected to API',
+                demoMode: '⚠️ Demo mode',
+                refresh: '🔄 Refresh products',
+                all: 'All',
+                mens: 'Men\'s',
+                womens: 'Women\'s',
+                accessories: 'Accessories',
+                loading: 'Loading products...',
+                notFound: 'No products found',
+                cart: '🛒 Cart',
+                yourCart: '🛒 Your cart',
+                selectSize: 'Select size:',
+                close: 'Close',
+                addToCart: 'Add to cart',
+                remove: 'Remove',
+                size: 'Size',
+                total: 'Total:',
+                continueShopping: 'Continue shopping',
+                checkout: 'Checkout',
+                emptyCart: 'Your cart is empty',
+                selectSizeAlert: 'Please select a size',
+                addedToCart: 'Product added to cart!',
+                apiError: '⚠️ API temporarily unavailable. Showing demo products.',
+                currency: '€'
+            }
+        };
+
+        // Курси валют (грн -> євро, приблизно)
+        const exchangeRates = {
+            uk: 1,      // грн
+            ru: 0.023,  // грн -> євро
+            en: 0.023   // грн -> євро
+        };
+
+        let currentLang = 'uk';
+
+        function t(key) {
+            return translations[currentLang][key] || key;
+        }
+
+        function convertPrice(priceInUAH) {
+            const convertedPrice = priceInUAH * exchangeRates[currentLang];
+            return currentLang === 'uk' 
+                ? Math.round(convertedPrice) 
+                : convertedPrice.toFixed(2);
+        }
+
+        function formatPrice(priceInUAH) {
+            return `${convertPrice(priceInUAH)} ${t('currency')}`;
+        }
+
+        function updateLanguage() {
+            document.getElementById('headerSubtitle').textContent = t('headerSubtitle');
+            document.getElementById('refreshBtn').innerHTML = t('refresh');
+            
+            const categoryBtns = document.querySelectorAll('.category-btn');
+            categoryBtns[0].textContent = t('all');
+            categoryBtns[1].textContent = t('mens');
+            categoryBtns[2].textContent = t('womens');
+            categoryBtns[3].textContent = t('accessories');
+            
+            const cartBtn = document.getElementById('cartBtn');
+            if (cart.length > 0) {
+                cartBtn.innerHTML = `${t('cart')} <span class="cart-count" id="cartCount">${cart.length}</span>`;
+            }
+            
+            renderProducts();
+        }
+
         window.addEventListener('load', () => {
             setTimeout(() => {
                 document.getElementById('loader').classList.add('hidden');
@@ -921,7 +1109,7 @@
                 
                 if (isAdmin) {
                     apiStatus.className = 'api-status online';
-                    apiStatus.textContent = '✅ З\'єднано з API';
+                    apiStatus.textContent = t('connected');
                 } else {
                     apiStatus.style.display = 'none';
                 }
@@ -932,8 +1120,8 @@
                 
                 if (isAdmin) {
                     apiStatus.className = 'api-status offline';
-                    apiStatus.textContent = '⚠️ Демо режим';
-                    errorContainer.innerHTML = `<div class="error-message">⚠️ API тимчасово недоступне. Показані демо-товари.</div>`;
+                    apiStatus.textContent = t('demoMode');
+                    errorContainer.innerHTML = `<div class="error-message">${t('apiError')}</div>`;
                 } else {
                     apiStatus.style.display = 'none';
                 }
@@ -949,7 +1137,7 @@
                 : products.filter(p => p.category === currentCategory);
 
             if (filtered.length === 0) {
-                grid.innerHTML = '<div class="empty-cart"><div class="empty-cart-icon">🔍</div><p>Товарів не знайдено</p></div>';
+                grid.innerHTML = `<div class="empty-cart"><div class="empty-cart-icon">🔍</div><p>${t('notFound')}</p></div>`;
                 return;
             }
 
@@ -962,7 +1150,7 @@
                     <div class="product-info">
                         <div class="product-type">${product.product_type || 'одяг'}</div>
                         <div class="product-name">${product.name}</div>
-                        <div class="product-price">${product.price} грн</div>
+                        <div class="product-price">${formatPrice(product.price)}</div>
                     </div>
                 </div>
             `).join('');
@@ -990,12 +1178,16 @@
             document.getElementById('modalType').textContent = selectedProduct.product_type || 'одяг';
             document.getElementById('modalTitle').textContent = selectedProduct.name;
             document.getElementById('modalDescription').textContent = selectedProduct.description;
-            document.getElementById('modalPrice').textContent = `${selectedProduct.price} грн`;
+            document.getElementById('modalPrice').textContent = formatPrice(selectedProduct.price);
             
             const sizes = selectedProduct.sizes.split(',');
             document.getElementById('sizeOptions').innerHTML = sizes.map(size => 
                 `<button class="size-btn" onclick="selectSize('${size.trim()}')">${size.trim()}</button>`
             ).join('');
+            
+            document.querySelector('.sizes-label').textContent = t('selectSize');
+            document.querySelector('#productModal .btn-secondary').textContent = t('close');
+            document.querySelector('#productModal .btn-primary').textContent = t('addToCart');
             
             document.getElementById('productModal').classList.add('active');
             tg.BackButton.show();
@@ -1017,7 +1209,7 @@
 
         function addToCart() {
             if (!selectedSize) {
-                tg.showAlert('Будь ласка, оберіть розмір');
+                tg.showAlert(t('selectSizeAlert'));
                 return;
             }
             
@@ -1029,7 +1221,7 @@
             updateCartCount();
             closeModal();
             tg.showPopup({
-                message: 'Товар додано до кошика!',
+                message: t('addedToCart'),
                 buttons: [{type: 'ok'}]
             });
         }
@@ -1042,7 +1234,7 @@
             if (count > 0) {
                 cartBtn.style.display = 'flex';
                 cartBtn.classList.add('show');
-                cartCount.textContent = count;
+                cartBtn.innerHTML = `${t('cart')} <span class="cart-count" id="cartCount">${count}</span>`;
             } else {
                 cartBtn.style.display = 'none';
                 cartBtn.classList.remove('show');
@@ -1061,7 +1253,7 @@
 
         function openCart() {
             if (cart.length === 0) {
-                tg.showAlert('Ваш кошик порожній');
+                tg.showAlert(t('emptyCart'));
                 return;
             }
 
@@ -1072,23 +1264,25 @@
                     <img class="cart-item-image" src="${item.image_url}" alt="${item.name}">
                     <div class="cart-item-info">
                         <div class="cart-item-name">${item.name}</div>
-                        <div class="cart-item-size">Розмір: ${item.selectedSize}</div>
-                        <div class="cart-item-price">${item.price} грн</div>
-                        <button class="cart-item-remove" onclick="removeFromCart(${index})">Видалити</button>
+                        <div class="cart-item-size">${t('size')}: ${item.selectedSize}</div>
+                        <div class="cart-item-price">${formatPrice(item.price)}</div>
+                        <button class="cart-item-remove" onclick="removeFromCart(${index})">${t('remove')}</button>
                     </div>
                 </div>
             `).join('');
 
             document.getElementById('cartActions').innerHTML = `
                 <div class="cart-total">
-                    <div class="cart-total-label">Загальна сума:</div>
-                    <div class="cart-total-amount">${total} грн</div>
+                    <div class="cart-total-label">${t('total')}</div>
+                    <div class="cart-total-amount">${formatPrice(total)}</div>
                 </div>
                 <div class="modal-actions">
-                    <button class="btn btn-secondary" onclick="closeModal()">Продовжити покупки</button>
-                    <button class="btn btn-primary" onclick="checkout()">Оформити замовлення</button>
+                    <button class="btn btn-secondary" onclick="closeModal()">${t('continueShopping')}</button>
+                    <button class="btn btn-primary" onclick="checkout()">${t('checkout')}</button>
                 </div>
             `;
+            
+            document.querySelector('#cartModal .modal-title').textContent = t('yourCart');
             
             document.getElementById('cartModal').classList.add('active');
             tg.BackButton.show();
@@ -1121,6 +1315,17 @@
                 e.target.classList.add('active');
                 currentCategory = e.target.dataset.category;
                 renderProducts();
+            }
+        });
+
+        document.querySelector('.language-switcher').addEventListener('click', (e) => {
+            if (e.target.classList.contains('lang-btn')) {
+                document.querySelectorAll('.lang-btn').forEach(btn => 
+                    btn.classList.remove('active')
+                );
+                e.target.classList.add('active');
+                currentLang = e.target.dataset.lang;
+                updateLanguage();
             }
         });
 
