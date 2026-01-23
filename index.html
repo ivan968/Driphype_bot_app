@@ -929,7 +929,18 @@
                 selectSizeAlert: 'Будь ласка, оберіть розмір',
                 addedToCart: 'Товар додано до кошика!',
                 apiError: '⚠️ API тимчасово недоступне. Показані демо-товари.',
-                currency: 'грн'
+                currency: 'грн',
+                productTypes: {
+                    'футболка': 'футболка',
+                    'штани': 'штани',
+                    'сукня': 'сукня',
+                    'куртка': 'куртка',
+                    'взуття': 'взуття',
+                    'спортивний': 'спортивний',
+                    'костюм': 'костюм',
+                    'аксесуар': 'аксесуар',
+                    'одяг': 'одяг'
+                }
             },
             ru: {
                 headerSubtitle: 'Premium Shop',
@@ -957,7 +968,18 @@
                 selectSizeAlert: 'Пожалуйста, выберите размер',
                 addedToCart: 'Товар добавлен в корзину!',
                 apiError: '⚠️ API временно недоступно. Показаны демо-товары.',
-                currency: '€'
+                currency: '€',
+                productTypes: {
+                    'футболка': 'футболка',
+                    'штани': 'штаны',
+                    'сукня': 'платье',
+                    'куртка': 'куртка',
+                    'взуття': 'обувь',
+                    'спортивний': 'спортивный',
+                    'костюм': 'костюм',
+                    'аксесуар': 'аксессуар',
+                    'одяг': 'одежда'
+                }
             },
             en: {
                 headerSubtitle: 'Premium Shop',
@@ -985,7 +1007,18 @@
                 selectSizeAlert: 'Please select a size',
                 addedToCart: 'Product added to cart!',
                 apiError: '⚠️ API temporarily unavailable. Showing demo products.',
-                currency: '€'
+                currency: '€',
+                productTypes: {
+                    'футболка': 't-shirt',
+                    'штани': 'pants',
+                    'сукня': 'dress',
+                    'куртка': 'jacket',
+                    'взуття': 'shoes',
+                    'спортивний': 'sportswear',
+                    'костюм': 'suit',
+                    'аксесуар': 'accessory',
+                    'одяг': 'clothing'
+                }
             }
         };
 
@@ -1000,6 +1033,11 @@
 
         function t(key) {
             return translations[currentLang][key] || key;
+        }
+
+        function translateProductType(type) {
+            const normalizedType = type?.toLowerCase() || 'одяг';
+            return translations[currentLang].productTypes[normalizedType] || type || 'clothing';
         }
 
         function convertPrice(priceInUAH) {
@@ -1148,7 +1186,7 @@
                          alt="${product.name}" 
                          onerror="this.src='data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%22200%22 height=%22200%22%3E%3Crect fill=%22%230a0a0a%22 width=%22200%22 height=%22200%22/%3E%3Ctext x=%2250%25%22 y=%2250%25%22 text-anchor=%22middle%22 dy=%22.3em%22 fill=%22%23666%22 font-size=%2250%22%3E${getProductIcon(product.product_type)}%3C/text%3E%3C/svg%3E'">
                     <div class="product-info">
-                        <div class="product-type">${product.product_type || 'одяг'}</div>
+                        <div class="product-type">${translateProductType(product.product_type)}</div>
                         <div class="product-name">${product.name}</div>
                         <div class="product-price">${formatPrice(product.price)}</div>
                     </div>
@@ -1175,7 +1213,7 @@
             selectedSize = null;
             
             document.getElementById('modalImage').src = selectedProduct.image_url;
-            document.getElementById('modalType').textContent = selectedProduct.product_type || 'одяг';
+            document.getElementById('modalType').textContent = translateProductType(selectedProduct.product_type);
             document.getElementById('modalTitle').textContent = selectedProduct.name;
             document.getElementById('modalDescription').textContent = selectedProduct.description;
             document.getElementById('modalPrice').textContent = formatPrice(selectedProduct.price);
