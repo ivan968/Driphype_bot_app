@@ -1168,64 +1168,6 @@
             renderProducts();
         }
 
-        async function silentLoadProducts() {
-            try {
-                const response = await fetch(`${API_URL}/api/products`, {
-                    method: 'GET',
-                    headers: {'Content-Type': 'application/json'},
-                    mode: 'cors'
-                });
-                
-                if (!response.ok) return;
-                
-                const data = await response.json();
-                if (data.error) return;
-                
-                const oldProducts = [...products];
-                products = data;
-                
-                // Оновлюємо тільки якщо є зміни
-                if (JSON.stringify(oldProducts) !== JSON.stringify(products)) {
-                    updateProductsWithoutAnimation();
-                }
-                
-            } catch (error) {
-                // Тихо ігноруємо помилки при фоновому оновленні
-            }
-        }
-
-        function updateProductsWithoutAnimation() {
-            const grid = document.getElementById('productsGrid');
-            const filtered = currentCategory === 'all' 
-                ? products 
-                : products.filter(p => p.category === currentCategory);
-
-            if (filtered.length === 0) {
-                grid.innerHTML = `<div class="empty-cart"><div class="empty-cart-icon">🔍</div><p>${t('notFound')}</p></div>`;
-                return;
-            }
-
-            // Оновлюємо HTML без анімацій
-            const existingCards = grid.querySelectorAll('.product-card');
-            existingCards.forEach(card => {
-                card.style.animation = 'none';
-            });
-
-            grid.innerHTML = filtered.map(product => `
-                <div class="product-card" style="animation: none; opacity: 1;" onclick="openProduct(${product.id})">
-                    <img class="product-image" 
-                         src="${product.image_url}" 
-                         alt="${product.name}" 
-                         onerror="this.src='data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%22200%22 height=%22200%22%3E%3Crect fill=%22%230a0a0a%22 width=%22200%22 height=%22200%22/%3E%3Ctext x=%2250%25%22 y=%2250%25%22 text-anchor=%22middle%22 dy=%22.3em%22 fill=%22%23666%22 font-size=%2250%22%3E${getProductIcon(product.product_type)}%3C/text%3E%3C/svg%3E'">
-                    <div class="product-info">
-                        <div class="product-type">${translateProductType(product.product_type)}</div>
-                        <div class="product-name">${product.name}</div>
-                        <div class="product-price">${formatPrice(product.price)}</div>
-                    </div>
-                </div>
-            `).join('');
-        }
-
         function renderProducts() {
             const grid = document.getElementById('productsGrid');
             const filtered = currentCategory === 'all' 
@@ -1435,7 +1377,7 @@
 
         setInterval(() => {
             if (isApiOnline) {
-                silentLoadProducts(); // Тихе оновлення без анімацій
+                loadProducts();
             }
         }, 30000);
     </script>
